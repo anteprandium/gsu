@@ -50,7 +50,7 @@ class IPProblem(object):
         self.A = matrix(ZZ,A)
         self.b = vector(ZZ,b)
         self.c = vector(ZZ,c)
-        self.lex=TermOrder('lex').compare_tuples_lex
+        # self.lex=TermOrder('lex').compare_tuples_lex
         # self.order = self.cost_order(c)
         # self.order=self.norder
         self.minimal=None
@@ -70,14 +70,21 @@ class IPProblem(object):
                                    for j in range(self.A.nrows())
                                    if self.A[j,i]!=0] or [0])
 
-
+    def cost(self, v):
+        """Compute the cost of some vector v"""
+        return self.c*v
 
     def order(self, v, w):
-        """Return 1 if v1>=v2, -1 in other case."""
-        t1=add(c_i*v_i for c_i,v_i in zip(self.c, v))
-        t2=add(c_i*v_i for c_i,v_i in zip(self.c, w))
+        """Return 1 if v1>=v2, -1 in other case.
+        We don't treat v and w as vectors, mostly because of
+        """
+        t1=self.cost(v)
+        t2=self.cost(w)
         if t1==t2:
-            return self.lex(v,w)
+            if v>=w:
+                return 1
+            else:
+                return -1
         else:
             return int(sign(t1-t2))
 
@@ -90,7 +97,7 @@ class IPProblem(object):
 
     def succ(self,v):
         """Return $v^\succ$. `v` is assumed to be a vector, so that `-v` works."""
-        if self.order(v, len(v)*[0])>0:
+        if self.order(v, vector(ZZ,len(v)*[0]))>0:
             return v
         else:
             return -v
@@ -178,7 +185,7 @@ class IPProblem(object):
 
 
         """
-        r=w    
+        r=w
         reducible=True
         while reducible:
             P=self.can_reduce_by_set(r,B)
@@ -287,19 +294,25 @@ class IPProblem(object):
             return False
         if not self.non_reducible:
             self.test_set_non_reducibles()
-        if path:
-            path_l=[s_0]
-        G=self.non_reducible
-        F=[self.is_feasible(s_0+g) for g in G]
-        verbose("G=%s\nF=%s"% (G,F), 2)
-        while any(F):
-            best=sorted(itertools.compress(G,F), cmp=self.order)[-1]
-            verbose("best=%s"%best)
-            assert(self.order(s_0+best,s_0)>=0)
-            s_0=s_0+best
-            if path:
+        T=self.non_reducible
+        F=[self.is_feasible(s_0+t) for t in T]
+        path_l=[s_0]
+        # verbose("Test set=%s"% T, 2)
+        cont=True
+        while cont and len(path_l)<20:
+            candidates=sorted(itertools.compress(T,F), cmp=self.order)
+            verbose("Path: %s" % path_l, 1)
+            verbose("Candidates: %s" % candidates,1)
+            verbose("Costs: %s" % [self.c*e for e in candidates], 1)
+            best=candidates[-1]
+            improved=s_0+best
+            if self.order(improved,s_0)>0:
+                s_0=improved
                 path_l.append(s_0)
-            F=[self.is_feasible(s_0+g) for g in G]
+                F=[self.is_feasible(s_0+t) for t in T]
+                cont=any(F)
+            else:
+                cont=False
         if path:
             return path_l
         else:
