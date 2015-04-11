@@ -66,21 +66,23 @@ class IPProblem(object):
             self.u=vector(ZZ,l*[0])
             for i in range(l):
                 # I THINK PAPER'S MISTAKEN.
-                self.u[i]=min([ ceil(self.b[j]/self.A[j,i])
-                                   for j in range(self.A.nrows())
+                self.u[i]=min([ceil(self.b[j]/self.A[j,i])
+                                for j in range(self.A.nrows())
                                    if self.A[j,i]!=0] or [0])
 
     def cost(self, v):
-        """Compute the cost of some vector v"""
+        """Compute the cost of some vector `v`"""
         return self.c*v
 
     def order(self, v, w):
-        """Return 1 if v1>=v2, -1 in other case.
-        We don't treat v and w as vectors, mostly because of
+        """
+        Return `1` if `v>=w`, ``-1`` in other case. 
+        Both `v` and `w` are assumed to be vectors.
         """
         t1=self.cost(v)
         t2=self.cost(w)
         if t1==t2:
+            assert(len(v)==len(w)) # remove this when stable.
             if v>=w:
                 return 1
             else:
@@ -88,12 +90,15 @@ class IPProblem(object):
         else:
             return int(sign(t1-t2))
 
+    def getz(self, v):
+        """Check if v is greater or equal than zero, component-wise."""
+        return all(vi>=0 for vi in v)
+
     def is_feasible(self, y):
         """Return `True` if `y` is feasible for this problem"""
         x=vector(ZZ,y)
-        return (all(i>=0 for i in x) and
-                all(i>=0 for i in (self.u-x)) and
-                all(i>=0 for i in self.b-(self.A)*x))
+        return (self.getz(x) and self.getz(self.u-x) 
+                and self.getz(self.b-self.A*x))
 
     def succ(self,v):
         """Return $v^\succ$. `v` is assumed to be a vector, so that `-v` works."""
@@ -109,7 +114,8 @@ class IPProblem(object):
             e=n*[0]
             e[i]=1
             l.append(vector(ZZ,e))
-        return l
+        # This is a mistake in the paper, I believe.
+        return [e for e in l if self.is_feasible(e)]
 
     def pm_split(self, v):
         """Split a vector `v` into its positive and negative part, so that $v=v^+-v^-$. """
@@ -124,10 +130,13 @@ class IPProblem(object):
         return vector(ZZ,p), vector(ZZ,m)
 
     def test_set(self):
+        P=prod(2*ui+1 for ui in self.u)
+        verbose("Bound: %s"% P,1)
+        
         B=self.standard_basis()
         pairs=[(i,j) for i in range(len(B)) for j in range(i+1,len(B))]
         while pairs:
-            verbose("pairs=%s"%pairs, 3)
+            verbose("|Pairs|: %s"% len(pairs), 2)
             i,j=pairs[0]
             v,w=B[i],B[j]
             # Make sure, w is bigger than v.
@@ -138,29 +147,32 @@ class IPProblem(object):
             if self.is_feasible(p) and self.is_feasible(m):
                 if w not in B:
                     B.append(w)
+                    verbose("|B|: %s" % len(B), 1)
                     l=len(B)-1
                     pairs+=[(i,l) for i in range(l)]
             pairs.pop(0)
         return B
 
     def can_reduce_by(self, v, w):
-        """Return true if `w` can be reduced by `v`. Here, `v` is assumed
-            to be an “improvement vector”.
-            """
+        """
+        Return true if `w` can be reduced by `v`. Here, `v` is assumed
+        to be an “improvement vector”.
+        """
         vp,vm=self.pm_split(v)
         wp,wm=self.pm_split(w)
-        if (all(xi>=0 for xi in wp-vp) and
-            all(xi>=0 for xi in wm-vm)):
+        if (self.getz(wp-vp) and
+            self.getz(wm-vm)):
             Avp,Avm=self.pm_split(self.A*v)
             Awp,Avm=self.pm_split(self.A*w)
-            return all(xi>=0 for xi in Awp-Avp)
+            return self.getz(Awp-Avp)
         else:
             return False
 
     def can_reduce_by_set(self, w, B):
-        """Return a pair (index, sign) of set `B` such that `sign*w` can be reduced by
-         `B[i]` or False if it isn't possible to reduce neither `w` nor `-w` by any
-         vector of `B`
+        """
+        Return a pair (index, sign) of set `B` such that `sign*w` can be reduced by
+        `B[i]` or False if it isn't possible to reduce neither `w` nor `-w` by any
+        vector of `B`
         """
         for (i,v) in enumerate(B):
             if self.can_reduce_by(v,w):
@@ -276,7 +288,7 @@ class IPProblem(object):
                     continue
                 v=self.succ(w-ei)
                 v_p,v_m=self.pm_split(v)
-                f=lambda vp:  all(xi>=0 for xi in v-vp) and self.can_reduce_by(vp,vp)
+                f=lambda vp:  self.getz(v-vp) and self.can_reduce_by(vp,vp)
                 if (self.is_feasible(v_p)
                     and self.is_feasible(v_m)
                     and not any(map(f, B))):
@@ -299,11 +311,11 @@ class IPProblem(object):
         path_l=[s_0]
         # verbose("Test set=%s"% T, 2)
         cont=True
-        while cont and len(path_l)<20:
+        while cont:
             candidates=sorted(itertools.compress(T,F), cmp=self.order)
-            verbose("Path: %s" % path_l, 1)
-            verbose("Candidates: %s" % candidates,1)
-            verbose("Costs: %s" % [self.c*e for e in candidates], 1)
+            verbose("Path so far: %s" % path_l, 1)
+            verbose("Candidates : %s" % candidates,1)
+            verbose("Costs      : %s" % [self.c*e for e in candidates], 1)
             best=candidates[-1]
             improved=s_0+best
             if self.order(improved,s_0)>0:
@@ -317,6 +329,16 @@ class IPProblem(object):
             return path_l
         else:
             return s_0
+            
+    def get_feasible(self):
+        """If you have computed a test set, hand out a feasible vector"""
+        T=self.minimal or self.non_reducible
+        if T:
+            vp,vm=self.pm_split(T[0])
+            return vp
+        else:
+            return None
+            
 
     def __repr__(self):
         s= """Integer programming problem
