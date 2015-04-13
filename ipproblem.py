@@ -74,16 +74,18 @@ class IPProblem(object):
         Return `1` if `v>=w`, ``-1`` in other case. 
         Both `v` and `w` are assumed to be vectors.
         """
-        t1=self.cost(v)
-        t2=self.cost(w)
-        if t1==t2:
+        t=self.cost(v)-self.cost(w)
+        if t==0:
             assert(len(v)==len(w)) # remove this when stable.
-            if v>=w:
-                return 1
-            else:
-                return -1
+            for v_i,w_i in zip(v,w):
+                if v_i>w_i:
+                    return 1
+                elif v_i<w_i:
+                    return -1
+            # If we get here, they are equal.
+            return 1
         else:
-            return int(sign(t1-t2))
+            return int(sign(t)) # needs to be int, so that works for cmp=order.
 
     def getz(self, v):
         """Check if v is greater or equal than zero, component-wise."""
