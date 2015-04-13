@@ -3,8 +3,9 @@
 """
 Algorithms for computing test sets of Integer Programming problems.
 
-
-Ongoing work by J. García, J. Soto y JM Ucha.
+# =========================================================
+# = This is ongoing work by J. García, J. Soto y JM Ucha. =
+# =========================================================
 
 This file implements the algorithms found in the following paper:
 
@@ -30,10 +31,7 @@ and then you can call functions on P. Specifically,
 * `P.minimal_set()` computes the unique minimal test set for `P`, following algorithm 2.7, using reductions.
 * `P.test_set_non_reducibles()` computes a test set, which might not be minimal, but better in general than the one you get with `P.test_set()`.
 
-
 """
-
-
 
 from sage.all import *
 import itertools
@@ -50,9 +48,6 @@ class IPProblem(object):
         self.A = matrix(ZZ,A)
         self.b = vector(ZZ,b)
         self.c = vector(ZZ,c)
-        # self.lex=TermOrder('lex').compare_tuples_lex
-        # self.order = self.cost_order(c)
-        # self.order=self.norder
         self.minimal=None
         self.non_reducible=None
 
@@ -99,6 +94,14 @@ class IPProblem(object):
         x=vector(ZZ,y)
         return (self.getz(x) and self.getz(self.u-x) 
                 and self.getz(self.b-self.A*x))
+                
+    def is_improvement(self, v):
+        """Check if `v` is an improvement vector."""
+        if self.order(v, vector(ZZ, len(v)*[0]))>0:
+            v_p,v_m=self.pm_split(v)
+            return (self.is_feasible(v_p) and self.is_feasible(v_m))
+        else:
+            return False
 
     def succ(self,v):
         """Return $v^\succ$. `v` is assumed to be a vector, so that `-v` works."""
@@ -132,7 +135,6 @@ class IPProblem(object):
     def test_set(self):
         P=prod(2*ui+1 for ui in self.u)
         verbose("Bound: %s"% P,1)
-        
         B=self.standard_basis()
         pairs=[(i,j) for i in range(len(B)) for j in range(i+1,len(B))]
         while pairs:
@@ -158,6 +160,7 @@ class IPProblem(object):
         Return true if `w` can be reduced by `v`. Here, `v` is assumed
         to be an “improvement vector”.
         """
+        assert(not w.is_zero())
         vp,vm=self.pm_split(v)
         wp,wm=self.pm_split(w)
         if (self.getz(wp-vp) and
@@ -188,21 +191,18 @@ class IPProblem(object):
 
     def reduce_by_set(self, w, B):
         """Reduce the vector `w` by the set of improvement vectors `B`.
-
-
         I DON'T KNOW IF, ONCE YOU REDUCE AT POSITION i, IT IS POSSIBLE
         TO HAVE REDUCTIONS IN A PREVIOUS POSITION. IF THAT'S THE CASE,
         IT SHOULD BE POSSIBLE TO REDUCE TIME ON THIS.
-
-
-
         """
         r=w
         reducible=True
         while reducible:
             P=self.can_reduce_by_set(r,B)
             if P:
+                # verbose("->reduced by index %s" % P[0], 2)
                 r=P[1]*r-B[P[0]]
+                reducible=not r.is_zero()
             else:
                 reducible=False
         return self.succ(r)
@@ -219,7 +219,7 @@ class IPProblem(object):
      """
         B=self.standard_basis()
         pairs=[(i,j) for i in range(len(B)) for j in range(i+1,len(B))]
-        while pairs and len(B)<300:
+        while pairs:
             # verbose("Size of pairs: %s" % len(pairs), 2)
             # verbose("Size of set  : %s" % len(B), 2)
             i,j=pairs[0]
@@ -234,9 +234,9 @@ class IPProblem(object):
                 # Include w, if it's not zero.
                 if not w.is_zero() and w not in B:
                     B.append(w)
-                    verbose("Added %s" % w, 2)
                     l=len(B)-1
                     pairs+=[(i,l) for i in range(l)]
+                    verbose("Added %s, now %s pairs" % (w, len(pairs)), level=1)
             pairs.pop(0)
 
         self.minimal=B
@@ -280,7 +280,7 @@ class IPProblem(object):
         E=self.standard_basis()
         B=E[:] # fast copy
         l=0
-        while l<len(B) and l<50:
+        while l<len(B):
             verbose("Running through %s of %s" % (l, len(B)), level=1)
             w=B[l]
             for ei in E:
@@ -332,13 +332,15 @@ class IPProblem(object):
             
     def get_feasible(self):
         """If you have computed a test set, hand out a feasible vector"""
-        T=self.minimal or self.non_reducible
-        if T:
-            vp,vm=self.pm_split(T[0])
-            return vp
-        else:
-            return None
-            
+        T=self.minimal or self.non_reducible or []
+        l=0
+        while l<len(T):
+            vp,vm=self.pm_split(T[l])
+            if not vp.is_zero():
+                return vp
+            if not vm.is_zero():
+                return vm
+        return None
 
     def __repr__(self):
         s= """Integer programming problem
