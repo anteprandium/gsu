@@ -64,6 +64,7 @@ class IPProblem(object):
                 self.u[i]=min([ceil(self.b[j]/self.A[j,i])
                                 for j in range(self.A.nrows())
                                    if self.A[j,i]!=0] or [0])
+        self.zero=vector(ZZ, len(self.u)*[0])
 
     def cost(self, v):
         """Compute the cost of some vector `v`"""
@@ -99,7 +100,7 @@ class IPProblem(object):
                 
     def is_improvement(self, v):
         """Check if `v` is an improvement vector."""
-        if self.order(v, vector(ZZ, len(v)*[0]))>0:
+        if self.order(v, self.zero)>0:
             v_p,v_m=self.pm_split(v)
             return (self.is_feasible(v_p) and self.is_feasible(v_m))
         else:
@@ -107,7 +108,7 @@ class IPProblem(object):
 
     def succ(self,v):
         """Return $v^\succ$. `v` is assumed to be a vector, so that `-v` works."""
-        if self.order(v, vector(ZZ,len(v)*[0]))>0:
+        if self.order(v, self.zero)>0:
             return v
         else:
             return -v
@@ -116,23 +117,23 @@ class IPProblem(object):
         n=self.A.ncols()
         l=[]
         for i in range(n):
-            e=n*[0]
+            e=copy(self.zero)
             e[i]=1
-            l.append(vector(ZZ,e))
+            l.append(e)
         # This is a mistake in the paper, I believe.
         return [e for e in l if self.is_feasible(e)]
 
     def pm_split(self, v):
         """Split a vector `v` into its positive and negative part, so that $v=v^+-v^-$. """
         l=len(v)
-        p=l*[0]
-        m=l*[0]
+        p=copy(self.zero)
+        m=copy(self.zero)
         for i in range(l):
             if v[i]>0:
                 p[i]=v[i]
             else:
                 m[i]=-v[i]
-        return vector(ZZ,p), vector(ZZ,m)
+        return p,m
 
     def test_set(self):
         P=prod(2*ui+1 for ui in self.u)
