@@ -305,7 +305,6 @@ class IPProblem(object):
                     continue
                 v=self.succ(w-ei)
                 v_p,v_m=self.pm_split(v)
-                f=lambda vp:  self.getz(v-vp) and self.can_reduce_by(vp,vp)
                 # f=lambda vp:  self.getz(v-vp) and self.can_reduce_by(vp,v)
                 if (self.is_feasible(v_p)
                     and self.is_feasible(v_m)
