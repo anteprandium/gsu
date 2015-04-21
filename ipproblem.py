@@ -111,7 +111,7 @@ class IPProblem(object):
 
     def succ(self,v):
         """Return $v^\succ$. `v` is assumed to be a vector, so that `-v` works."""
-        if self.order(v, self.zero)>0:
+        if self.order(v, self.zero)>=0:
             return v
         else:
             return -v
@@ -127,7 +127,7 @@ class IPProblem(object):
         return [e for e in l if self.is_feasible(e)]
 
     def pm_split(self, v):
-        """Split a vector `v` into its positive and negative part, so that $v=v^+-v^-$. """
+        """Split a vector `v` into its positive and negative part, so that $v=v^+-v^-$."""
         l=len(v)
         p=copy(self.zero)
         m=copy(self.zero)
