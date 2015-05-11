@@ -323,9 +323,10 @@ class IPProblem(object):
         s_0=vector(ZZ,s)
         if not self.is_feasible(s_0):
             return False
-        if not self.non_reducible:
-            self.test_set_non_reducibles()
-        T=self.non_reducible
+        T=self.minimal or self.non_reducible
+        if not T:
+            self.minimal()
+        T=self.minimal
         F=[self.is_feasible(s_0+t) for t in T]
         path_l=[s_0]
         # verbose("Test set=%s"% T, 2)
@@ -335,6 +336,9 @@ class IPProblem(object):
             verbose("Path so far: %s" % path_l, 1)
             verbose("Candidates : %s" % candidates,1)
             verbose("Costs      : %s" % [self.c*e for e in candidates], 1)
+            if not candidates: # we already got the best...
+                cont=False
+                break
             best=candidates[-1]
             improved=s_0+best
             if self.order(improved,s_0)>0:
