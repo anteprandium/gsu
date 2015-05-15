@@ -50,6 +50,9 @@ class IPProblem(object):
         self.c = vector(ZZ,c)
         self.minimal=None
         self.non_reducible=None
+        self.rows=self.A.nrows()
+        self.cols=self.A.ncols()
+        
 
         assert(len(self.b)==self.A.nrows())
 
@@ -64,7 +67,10 @@ class IPProblem(object):
                 self.u[i]=min([ceil(self.b[j]/self.A[j,i])
                                 for j in range(self.A.nrows())
                                    if self.A[j,i]!=0] or [0])
+                                   
         self.zero=vector(ZZ, len(self.u)*[0])
+        self.zerocol=vector(ZZ, self.cols*[0])
+        
 
     def cost(self, v):
         """Compute the cost of some vector `v`"""
@@ -129,8 +135,12 @@ class IPProblem(object):
     def pm_split(self, v):
         """Split a vector `v` into its positive and negative part, so that $v=v^+-v^-$."""
         l=len(v)
-        p=copy(self.zero)
-        m=copy(self.zero)
+        if l==self.cols:
+            p=copy(self.zero)
+            m=copy(self.zero)
+        else:
+            p=copy(self.zerocol)
+            m=copy(self.zerocol)
         for i in range(l):
             if v[i]>=0:
                 p[i]=v[i]
