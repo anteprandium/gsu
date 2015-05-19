@@ -69,7 +69,7 @@ class IPProblem(object):
                                    if self.A[j,i]!=0] or [0])
                                    
         self.zero=vector(ZZ, len(self.u)*[0])
-        self.zerocol=vector(ZZ, self.cols*[0])
+        self.zerorow=vector(ZZ, self.rows*[0])
         
 
     def cost(self, v):
@@ -139,8 +139,8 @@ class IPProblem(object):
             p=copy(self.zero)
             m=copy(self.zero)
         else:
-            p=copy(self.zerocol)
-            m=copy(self.zerocol)
+            p=copy(self.zerorow)
+            m=copy(self.zerorow)
         for i in range(l):
             if v[i]>=0:
                 p[i]=v[i]
