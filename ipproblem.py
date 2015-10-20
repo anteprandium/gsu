@@ -50,6 +50,9 @@ class IPProblem(object):
         self.c = vector(ZZ,c)
         self.minimal=None
         self.non_reducible=None
+        self.rows=self.A.nrows()
+        self.cols=self.A.ncols()
+        
 
         assert(len(self.b)==self.A.nrows())
 
@@ -64,6 +67,10 @@ class IPProblem(object):
                 self.u[i]=min([ceil(self.b[j]/self.A[j,i])
                                 for j in range(self.A.nrows())
                                    if self.A[j,i]!=0] or [0])
+                                   
+        self.zero=vector(ZZ, len(self.u)*[0])
+        self.zerorow=vector(ZZ, self.rows*[0])
+        
 
     def cost(self, v):
         """Compute the cost of some vector `v`"""
@@ -71,25 +78,28 @@ class IPProblem(object):
 
     def order(self, v, w):
         """
-        Return `1` if `v>=w`, ``-1`` in other case. 
+        Return `1` if `v>w`, `0` if `v==w`, and `-1`  if `v<w`.
         Both `v` and `w` are assumed to be vectors.
         """
         t=self.cost(v)-self.cost(w)
         if t==0:
-            assert(len(v)==len(w)) # remove this when stable.
+            # assert(len(v)==len(w)) # remove this when stable.
             for v_i,w_i in zip(v,w):
                 if v_i>w_i:
                     return 1
                 elif v_i<w_i:
                     return -1
             # If we get here, they are equal.
-            return 1
+            return 0
         else:
             return int(sign(t)) # needs to be int, so that works for cmp=order.
 
     def getz(self, v):
         """Check if v is greater or equal than zero, component-wise."""
-        return all(vi>=0 for vi in v)
+        # return all(vi>=0 for vi in v)
+        for vi in v:
+            if vi<0: return False
+        return True
 
     def is_feasible(self, y):
         """Return `True` if `y` is feasible for this problem"""
@@ -99,7 +109,7 @@ class IPProblem(object):
                 
     def is_improvement(self, v):
         """Check if `v` is an improvement vector."""
-        if self.order(v, vector(ZZ, len(v)*[0]))>0:
+        if self.order(v, self.zero)>0:
             v_p,v_m=self.pm_split(v)
             return (self.is_feasible(v_p) and self.is_feasible(v_m))
         else:
@@ -107,7 +117,7 @@ class IPProblem(object):
 
     def succ(self,v):
         """Return $v^\succ$. `v` is assumed to be a vector, so that `-v` works."""
-        if self.order(v, vector(ZZ,len(v)*[0]))>0:
+        if self.order(v, self.zero)>=0:
             return v
         else:
             return -v
@@ -116,23 +126,27 @@ class IPProblem(object):
         n=self.A.ncols()
         l=[]
         for i in range(n):
-            e=n*[0]
+            e=copy(self.zero)
             e[i]=1
-            l.append(vector(ZZ,e))
+            l.append(e)
         # This is a mistake in the paper, I believe.
         return [e for e in l if self.is_feasible(e)]
 
     def pm_split(self, v):
-        """Split a vector `v` into its positive and negative part, so that $v=v^+-v^-$. """
+        """Split a vector `v` into its positive and negative part, so that $v=v^+-v^-$."""
         l=len(v)
-        p=l*[0]
-        m=l*[0]
+        if l==self.cols:
+            p=copy(self.zero)
+            m=copy(self.zero)
+        else:
+            p=copy(self.zerorow)
+            m=copy(self.zerorow)
         for i in range(l):
-            if v[i]>0:
+            if v[i]>=0:
                 p[i]=v[i]
             else:
                 m[i]=-v[i]
-        return vector(ZZ,p), vector(ZZ,m)
+        return p,m
 
     def test_set(self):
         P=prod(2*ui+1 for ui in self.u)
@@ -159,19 +173,32 @@ class IPProblem(object):
 
     def can_reduce_by(self, v, w):
         """
-        Return true if `w` can be reduced by `v`. Here, `v` is assumed
+        Return ±1 if `±w` can be reduced by `v`, else return None. Here, `v` is assumed
         to be an “improvement vector”.
         """
-        assert(not w.is_zero())
+        # assert(not w.is_zero())
         vp,vm=self.pm_split(v)
         wp,wm=self.pm_split(w)
         if (self.getz(wp-vp) and
             self.getz(wm-vm)):
             Avp,Avm=self.pm_split(self.A*v)
-            Awp,Avm=self.pm_split(self.A*w)
-            return self.getz(Awp-Avp)
-        else:
-            return False
+            Awp,Awm=self.pm_split(self.A*w)
+            if self.getz(Awp-Avp):
+                return 1
+            # # Just return a None
+            # else:
+            #     return False
+        elif (self.getz(wm-vp) and 
+                    self.getz(wp-vm)):
+            Avp,Avm=self.pm_split(self.A*v)
+            Awp,Awm=self.pm_split(self.A*w)                    
+            if self.getz(Awm-Avp):
+                return -1
+        # # Just return None
+        #     else:
+        #         return False
+        # else:
+        #     return False
 
     def can_reduce_by_set(self, w, B):
         """
@@ -180,10 +207,9 @@ class IPProblem(object):
         vector of `B`
         """
         for (i,v) in enumerate(B):
-            if self.can_reduce_by(v,w):
-                return (i,1)
-            elif self.can_reduce_by(v,-w):
-                return (i,-1)
+            c=self.can_reduce_by(v,w)
+            if c:
+                return (i,c)
         return False
 
 
@@ -211,7 +237,9 @@ class IPProblem(object):
 
 
     def minimal_test_set(self):
-        """Compute a minimal test set using 'reduction'.
+        """
+        Compute a minimal test set using 'reduction'.
+        (Update: it now caches the result in self.minimal)
 
         I HAVE ELIMINATED THE POSSIBILITY OF INCLUDING THE
         ZERO VECTOR IN THE GROEBNER BASIS. I DON'T KNOW IF THIS
@@ -219,12 +247,14 @@ class IPProblem(object):
         ALLOW FOR ZERO VECTORS IN THE BASIS.
 
      """
+        if self.minimal:
+            return self.minimal
         B=self.standard_basis()
         pairs=[(i,j) for i in range(len(B)) for j in range(i+1,len(B))]
         while pairs:
             # verbose("Size of pairs: %s" % len(pairs), 2)
             # verbose("Size of set  : %s" % len(B), 2)
-            i,j=pairs[0]
+            i,j=pairs.pop(0)
             v,w=B[i],B[j]
             # Make sure, w is bigger than v.
             if self.order(v,w)>0:
@@ -239,7 +269,6 @@ class IPProblem(object):
                     l=len(B)-1
                     pairs+=[(i,l) for i in range(l)]
                     verbose("Added %s, now %s pairs" % (w, len(pairs)), level=1)
-            pairs.pop(0)
 
         self.minimal=B
         return B
@@ -290,10 +319,12 @@ class IPProblem(object):
                     continue
                 v=self.succ(w-ei)
                 v_p,v_m=self.pm_split(v)
-                f=lambda vp:  self.getz(v-vp) and self.can_reduce_by(vp,vp)
+                # f=lambda vp:  self.getz(v-vp) and self.can_reduce_by(vp,v)
                 if (self.is_feasible(v_p)
                     and self.is_feasible(v_m)
-                    and not any(map(f, B))):
+                    and not #any(map(f, B))
+                        any(self.getz(v-vp) and self.can_reduce_by(vp,v) for vp in B)
+                    ):
                     B.append(v)
                     verbose("Added %s" % v, 1)
             l+=1
@@ -306,9 +337,10 @@ class IPProblem(object):
         s_0=vector(ZZ,s)
         if not self.is_feasible(s_0):
             return False
-        if not self.non_reducible:
-            self.test_set_non_reducibles()
-        T=self.non_reducible
+        T=self.minimal or self.non_reducible
+        if not T:
+            self.minimal()
+        T=self.minimal
         F=[self.is_feasible(s_0+t) for t in T]
         path_l=[s_0]
         # verbose("Test set=%s"% T, 2)
@@ -318,6 +350,9 @@ class IPProblem(object):
             verbose("Path so far: %s" % path_l, 1)
             verbose("Candidates : %s" % candidates,1)
             verbose("Costs      : %s" % [self.c*e for e in candidates], 1)
+            if not candidates: # we already got the best...
+                cont=False
+                break
             best=candidates[-1]
             improved=s_0+best
             if self.order(improved,s_0)>0:
