@@ -237,7 +237,9 @@ class IPProblem(object):
 
 
     def minimal_test_set(self):
-        """Compute a minimal test set using 'reduction'.
+        """
+        Compute a minimal test set using 'reduction'.
+        (Update: it now caches the result in self.minimal)
 
         I HAVE ELIMINATED THE POSSIBILITY OF INCLUDING THE
         ZERO VECTOR IN THE GROEBNER BASIS. I DON'T KNOW IF THIS
@@ -245,6 +247,8 @@ class IPProblem(object):
         ALLOW FOR ZERO VECTORS IN THE BASIS.
 
      """
+        if self.minimal:
+            return self.minimal
         B=self.standard_basis()
         pairs=[(i,j) for i in range(len(B)) for j in range(i+1,len(B))]
         while pairs:
