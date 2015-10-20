@@ -1,4 +1,4 @@
-#!/usr/bin/env /Users/soto/Scripts/sage -python
+#!/usr/bin/env sage -python
 # encoding: utf-8
 
 """
@@ -407,7 +407,8 @@ u=%s."""
         [(1, 0, 0, 0, 0), (0, 1, 0, 0, 0), (0, 0, 1, 0, 0), (-1, 1, 0, 0, 0), (1, 0, -1, 0, 0), (0, 1, -1, 0, 0)]
         >>> P.walk_to_best(P.get_feasible())
         (0, 1, 1, 0, 0)
-        >>> P.walkback(region=lambda x: x[0]**2+x[1]**2<2)
+        >>> P.walkback(region=lambda x: x[0]**2+x[1]**2+x[2]**2<2)
+        ((0, 1, 0, 0, 0), 4)
         """
         # Sort a minimal test set by increasing cost.
         T=sorted(self.minimal_test_set(), key=self.cost)
@@ -418,36 +419,40 @@ u=%s."""
         S=[first_point] # the first point is always feasible.
         while S:
             v=S.pop(0) # Get first in queue
+            verbose("|S|=%d"%len(S), level=2)
             c=self.cost(v)
             
             # Cross out from future examinations
-            if not v in visited:
+            if v in visited:
+                break
+            else:
                 visited.append(v)
             # see if it's better than what we have so far
             # if self.is_feasible(v) and region(v):
             if  region(v): # we can skip feasibility, since we only include feasibles.
-                if not current_cost or c<current_cost:
+                if  current_cost is None or c>current_cost:
                     current_best,current_cost=v,c
+                    verbose("current best=%s, current_cost=%s"%(current_best, current_cost), level=1)
             # Now, look at sons.
             for d in T:
                 w = v-d # You'll be worsening things here.
                 new_c = self.cost(w)
                 if (self.is_feasible(w) and
+                    not w in S and
                     not w in visited and
-                    (not current_cost or new_c > current_cost)):
+                    (current_cost is None or new_c > current_cost)):
                     verbose("appending %s"%w, level=2)
                     S.append(w)
                     
-            verbose("|S|=%d"%len(S), level=1)
         if current_cost:
             return current_best, current_cost
         else:
             return None
         
         
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
+# if __name__ == '__main__':
+#     import doctest
+#     doctest.testmod()
     
     
     
