@@ -1,4 +1,5 @@
-# coding=utf-8
+#!/usr/bin/env /Users/soto/Scripts/sage -python
+# encoding: utf-8
 
 """
 Algorithms for computing test sets of Integer Programming problems.
@@ -49,6 +50,7 @@ class IPProblem(object):
         self.b = vector(ZZ,b)
         self.c = vector(ZZ,c)
         self.minimal=None
+        self.best=None
         self.non_reducible=None
         self.rows=self.A.nrows()
         self.cols=self.A.ncols()
@@ -334,6 +336,8 @@ class IPProblem(object):
     def walk_to_best(self,s, path=False):
         """Given a feasible solution $s$, walk from  $s$ to the optimum. Return the optimum, or, if `path` is `True`, the full path from `s` to the optimum.
         """
+        if self.best:
+            return self.best
         s_0=vector(ZZ,s)
         if not self.is_feasible(s_0):
             return False
@@ -362,6 +366,7 @@ class IPProblem(object):
                 cont=any(F)
             else:
                 cont=False
+        self.best=s_0
         if path:
             return path_l
         else:
@@ -389,3 +394,60 @@ A=
 b=%s,
 u=%s."""
         return s % (self.c, self.A, self.b, self.u)
+
+
+    def walkback(self, region=lambda x: True):
+        """
+        Start a walk back from the optimus of the regular problem
+        to an optimus which is also within the region determined by
+        the function `region` (Might be non-linear).
+        
+        >>> P=IPProblem(c=[3, 4, 3, 6, 3],A=[[3, 2, 1, 5, 7]], b=[4], u=[1,1,1,1,1] )
+        >>> P.minimal_test_set()
+        [(1, 0, 0, 0, 0), (0, 1, 0, 0, 0), (0, 0, 1, 0, 0), (-1, 1, 0, 0, 0), (1, 0, -1, 0, 0), (0, 1, -1, 0, 0)]
+        >>> P.walk_to_best(P.get_feasible())
+        (0, 1, 1, 0, 0)
+        >>> P.walkback(region=lambda x: x[0]**2+x[1]**2<2)
+        """
+        # Sort a minimal test set by increasing cost.
+        T=sorted(self.minimal_test_set(), key=self.cost)
+        first_point=self.walk_to_best(self.get_feasible(), False)
+        visited=[]
+        current_best=False
+        current_cost=False
+        S=[first_point] # the first point is always feasible.
+        while S:
+            v=S.pop(0) # Get first in queue
+            c=self.cost(v)
+            
+            # Cross out from future examinations
+            if not v in visited:
+                visited.append(v)
+            # see if it's better than what we have so far
+            # if self.is_feasible(v) and region(v):
+            if  region(v): # we can skip feasibility, since we only include feasibles.
+                if not current_cost or c<current_cost:
+                    current_best,current_cost=v,c
+            # Now, look at sons.
+            for d in T:
+                w = v-d # You'll be worsening things here.
+                new_c = self.cost(w)
+                if (self.is_feasible(w) and
+                    not w in visited and
+                    (not current_cost or new_c > current_cost)):
+                    verbose("appending %s"%w, level=2)
+                    S.append(w)
+                    
+            verbose("|S|=%d"%len(S), level=1)
+        if current_cost:
+            return current_best, current_cost
+        else:
+            return None
+        
+        
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()
+    
+    
+    
