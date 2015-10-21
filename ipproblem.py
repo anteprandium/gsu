@@ -409,6 +409,17 @@ u=%s."""
         (0, 1, 1, 0, 0)
         >>> P.walkback(region=lambda x: x[0]**2+x[1]**2+x[2]**2<2)
         ((0, 1, 0, 0, 0), 4)
+        
+        
+        !!! Nota: 
+        Para demostrar que este algoritmo siempre calcula el óptimo con la restricción
+        adicional de la región, hay que argumentarlo. Creo que 
+        una línea argumental positiva es la siguiente: Si el “esqueleto” que resulta
+        de considerar el test set da un grafo dirigido con fin en el óptimo, el grafo
+        con direcciones inversas empezando en el óptimo, con el algoritmo de 
+        travesía de grafos en profundidad y con las aristas ordenadas en orden creciente,
+        recorre cada punto desde el coste mayor hacia abajo, y se queda con el máximo 
+        cada vez que entra en la región determinada por `region`.
         """
         # Sort a minimal test set by increasing cost.
         T=sorted(self.minimal_test_set(), key=self.cost)
