@@ -343,7 +343,7 @@ class IPProblem(object):
             return False
         T=self.minimal or self.non_reducible
         if not T:
-            self.minimal()
+            self.minimal_test_set()
         T=self.minimal
         F=[self.is_feasible(s_0+t) for t in T]
         path_l=[s_0]
