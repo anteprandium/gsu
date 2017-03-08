@@ -3,8 +3,6 @@
 from collections import deque
 
 
-
-
 def getz(v):
         """Check if v is greater or equal than zero, component-wise."""
         # return all(vi>=0 for vi in v) #(Slower by a factor of 2)
@@ -99,7 +97,7 @@ class PartialBasis(object):
         add element e to partial basis, update critical pairs to be computed, 
         and precompute as much stuff as possible for reduction.
         """
-        cv = c*v
+        cv = self.c*v
         e = v if cv>0 else -v  # this makes sure that e^+ >_c e^-.
         l = len(self.vectors)
         self.vectors.append(e)
@@ -262,9 +260,12 @@ def bubu(A,b,c,u):
             i, j = j, i
         # At this point, cv < cw.
         # 2.2.1
-        if g.eligible[i]:
+        #if g.eligible[i]:
+        r = g.vectors[j]-g.vectors[i]
+        rp,rm = pm_split(r)
+        if let(rp,u) and let(rm,u) and let(A*rp,b) and let(A*rm,b) :
             rx +=1
-            r = g.vectors[j]-g.vectors[i]
+            # r = g.vectors[j]-g.vectors[i]
             c = g.reduce(r)
             if not isz(c):
                 g.add_element(c)
