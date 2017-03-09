@@ -24,40 +24,40 @@ def let(a,b):
         if a[i]>b[i]:
             return False
     return True
-
-
+    
+def let_pp(a,b):
+    "True if and only if a^+ is less or equal than b^+."
+    for i in xrange(len(a)):
+        if a[i]>0 and a[i]>max(b[i], 0):
+            return False
+    return True
+    
+def let_pm(a,b):
+    "True if and only if a^+ is less or equal than b^-."
+    for i in xrange(len(a)):
+        if a[i]>0 and a[i]>max(-b[i], 0):
+            return False
+    return True
+    
+def let_mp(a,b):
+    "True if and only if a^- is less or equal than b^+."
+    for i in xrange(len(a)):
+        if a[i]<0 and -a[i]>max(b[i], 0):
+            return False
+    return True
+    
+def let_mm(a,b):
+    "True if and only if a^- is less or equal than b^-."
+    for i in xrange(len(a)):
+        if a[i]<0 and -a[i]>max(-b[i], 0):
+            return False
+    return True
+    
 
 def standard_basis(n):
     return identity_matrix(ZZ,n).rows()
 
 
-
-# def pm_split3(v):
-#     "Split a vector `v` into its positive and negative part, so that $v=v^-v^-$."
-#     up = []
-#     um = []
-#     for a in v:
-#         if a>=0:
-#             up.append(a)
-#             um.append(0)
-#         else:
-#             up.append(0)
-#             um.append(-a)
-#     return vector(ZZ,up), vector(ZZ,um)
-#
-#
-# def pm_split2(v):
-#     """ slightly faster than pm_split3"""
-#     l = len(v)
-#     up = [0]*l
-#     um = [0]*l
-#     for i in xrange(l):
-#         if v[i]>0:
-#             up[i]=v[i]
-#         else:
-#             um[i]=-v[i]
-#     return vector(ZZ,up), vector(ZZ,um)
-#
 def pm_split(v):
     """ slightly faster than pm_split2"""
     l = len(v)
@@ -82,13 +82,9 @@ class PartialBasis(object):
         self.u = u
         self.vectors = []
         self.cv = []
-        self.vecp = []
-        self.vecn = []
+        self.Av = []
         self.pairs = []
         self.psupp = []
-        self.Avp = []
-        self.Avm = []
-        self.eligible = []
         for e in identity_matrix(ZZ,self.n).rows():
             self.add_element(e)
     
@@ -101,18 +97,12 @@ class PartialBasis(object):
         e = v if cv>0 else -v  # this makes sure that e^+ >_c e^-.
         l = len(self.vectors)
         self.vectors.append(e)
+        self.cv.append(abs(cv))
+        self.Av.append(A*e)
+        self.psupp.append(set(e.support()))
         if l: # true if this is not the first vector
             for i in xrange(l):
                 self.pairs.append((i,l))
-        ep, em = pm_split(e)
-        self.vecp.append(ep)
-        self.vecn.append(em)
-        self.psupp.append(set(e.support()))
-        Avp, Avm = pm_split(A*e)
-        self.Avp.append(Avp)
-        self.Avm.append(Avm)
-        self.cv.append(abs(cv))
-        self.eligible.append(let(ep,self.u) and let(em,self.u) and let(A*ep,self.b) and let(A*em,self.b) )
         
         
     def criterion_1(self, i, j):
@@ -159,24 +149,21 @@ class PartialBasis(object):
         """
         round = 0
         v = self.vectors[i]
-        vp = self.vecp[i]
-        vm = self.vecn[i]
-        Avp = self.Avp[i]
-        Avm = self.Avm[i]
+        Av = self.Av[i]
         
         w = s
         
         # if w == v or w == -v: return vector(ZZ,self.n*[0])
     
-        while True and not isz(w):
-            wp, wm = pm_split(w)
-            Awp, Awm = pm_split(A*w)
-            if let(vp, wp) and let(vm,wm) and let(Avp, Awp): 
+        while not isz(w):
+            Aw = A*w
+            if let_pp(v,w) and let_mm(v,w) and let_pp(Av, Aw):
                 # w is reducible
                 round += 1
                 w = w-v
-            elif let(vp,wm) and let(vm,wp) and let(Avp,Awm):
+            elif let_pm(v,w) and let_mp(v,w) and let_pm(Av, Aw):
                 # -w is reducible
+                # print "-", w, -w-v
                 round += 1
                 w = -w-v
             else:
@@ -191,24 +178,22 @@ class PartialBasis(object):
         
     def reduce(self, v):
         """reduce"""
-        # for i in range(len(self.vectors)):
-        #     r = self.reduce_by_ith(v, i)
-        #     if not (r is False):
-        #         return r
-        # return False
+        # print "r->:", v
         l = len(self.vectors)
-        vectors = deque(range(l))
+        indices = deque(range(l))
         i = 0
         w = v
         while i<l and not isz(w):
-            r = self.reduce_by_ith(w,vectors[i])
-            if not (r is False):
+            # print '.',
+            r = self.reduce_by_ith(w,indices[i])
+            if r is False:
+                i += 1
+            else: # i.e, if r is a true reduction.
                 # rotate the list and start over
-                vectors.rotate(i+1)
+                indices.rotate(i+1)
                 i = 0
                 w = r
-            else:
-                i += 1
+        # print "r<-:", w
         return w
         
         
@@ -241,7 +226,7 @@ def bubu(A,b,c,u):
     equ = 0
     
     while g.unfinished():
-        if len(g.vectors)>200: break
+        if len(g.vectors)>100: break
         i, j = g.pop()
         if g.criterion_1(i,j): 
             c1 += 1
@@ -262,13 +247,15 @@ def bubu(A,b,c,u):
         # 2.2.1
         #if g.eligible[i]:
         r = g.vectors[j]-g.vectors[i]
-        rp,rm = pm_split(r)
-        if let(rp,u) and let(rm,u) and let(A*rp,b) and let(A*rm,b) :
+        Ar = A*r
+        # rp,rm = pm_split(r)
+        if let_pp(r,u) and let_mp(r,u) and let_pp(Ar,b) and let_mp(Ar,b) :
             rx +=1
-            # r = g.vectors[j]-g.vectors[i]
             c = g.reduce(r)
             if not isz(c):
                 g.add_element(c)
+                # print "+", c
+                # print g.vectors
         else:
             elig += 1
             next
@@ -279,8 +266,8 @@ def bubu(A,b,c,u):
     
     
     
-A = matrix(ZZ, [[3,1,11,2,3,5,3], [4, 5, 0, 1, 7,4, 6], [5,6,1,9,2,3,3]])
-c = vector(ZZ, [23,15,6,7,1,53,4])
-b = vector(ZZ, [31,27,38])
-u = vector(ZZ, 7*[38])
+A1 = matrix(ZZ, [[3,1,11,2,3,5,3], [4, 5, 0, 1, 7,4, 6], [5,6,1,9,2,3,3]])
+c1 = vector(ZZ, [23,15,6,7,1,53,4])
+b1 = vector(ZZ, [31,27,38])
+u1 = vector(ZZ, 7*[38])
     
