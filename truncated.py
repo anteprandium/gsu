@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from collections import deque
-
+import pdb
 
 def getz(v):
         """Check if v is greater or equal than zero, component-wise."""
@@ -24,38 +24,75 @@ def let(a,b):
         if a[i]>b[i]:
             return False
     return True
-    
+
 def let_pp(a,b):
-    "True if and only if a^+ is less or equal than b^+."
+    "True if and only if a^+ is less than or equal b^+."
     for i in xrange(len(a)):
         if a[i]>0 and a[i]>max(b[i], 0):
             return False
     return True
-    
+
 def let_pm(a,b):
     "True if and only if a^+ is less or equal than b^-."
     for i in xrange(len(a)):
         if a[i]>0 and a[i]>max(-b[i], 0):
             return False
     return True
-    
+
 def let_mp(a,b):
     "True if and only if a^- is less or equal than b^+."
     for i in xrange(len(a)):
         if a[i]<0 and -a[i]>max(b[i], 0):
             return False
     return True
-    
+
 def let_mm(a,b):
     "True if and only if a^- is less or equal than b^-."
     for i in xrange(len(a)):
         if a[i]<0 and -a[i]>max(-b[i], 0):
             return False
     return True
-    
 
-def standard_basis(n):
-    return identity_matrix(ZZ,n).rows()
+def disjoint_pp(v, w):
+    """true if v^+ and w^+ have disjoint support."""
+    return not set(i for i in xrange(len(v)) if v[i]>0).intersection(
+        j for j in xrange(len(w)) if w[j]>0)
+    
+def disjoint_mm(v, w):
+    """true if v^- and w^- have disjoint support."""
+    # return not set(i for i in xrange(len(v)) if v[i]<0).intersection(
+    #     j for j in xrange(len(w)) if w[j]<0)
+    return  not bool(set(i for (i,vi) in enumerate(v) if vi<0).intersection(
+        j for (j,wi) in enumerate(w) if wi<0))
+
+def max_ppp(z, u, w):
+    """check that z^+ ≤ u^+ ∨ v^+"""
+    for l in xrange(len(z)):
+        if z[l]>0 and  z[l]> max(u[l],w[l],0):
+            return False
+    return True
+
+def max_mmm(z, u, w):
+    """check that z^- ≤ u^- ∨ v^-"""
+    for l in xrange(len(z)):
+        if z[l]<0 and  -z[l]>max(-u[l],-w[l],0):
+            return False
+    return True
+
+def ne_max_max(z, u, w):
+    """check that z^+ ∨ u^+ ≠ u^+ ∨ w^+"""
+    for l in xrange(len(z)):
+        if max(z[l], u[l],0) != max(u[l], w[l],0):
+            return True
+    return False
+
+def ne_max_max_minus(z, u, w):
+    """check that z^- ∨ u^- ≠ u^- ∨ w^-"""
+    for l in xrange(len(z)):
+        if max(-z[l], -u[l],0) != max(-u[l], -w[l],0):
+            return True
+    return False
+
 
 
 def pm_split(v):
@@ -70,12 +107,12 @@ def pm_split(v):
             um[i]=-a
     return vector(ZZ,up), vector(ZZ,um)
 
-    
+
 class PartialBasis(object):
     """docstring for PartialBasis"""
     def __init__(self, A, c, b, u):
         super(PartialBasis, self).__init__()
-        self.n = A.dimensions()[1] 
+        self.n = A.dimensions()[1]
         self.A = A
         self.c = c
         self.b = b
@@ -84,13 +121,12 @@ class PartialBasis(object):
         self.cv = []
         self.Av = []
         self.pairs = []
-        self.psupp = []
         for e in identity_matrix(ZZ,self.n).rows():
             self.add_element(e)
-    
-    def add_element(self, v, check=True):
+
+    def add_element(self, v):
         """
-        add element e to partial basis, update critical pairs to be computed, 
+        add element e to partial basis, update critical pairs to be computed,
         and precompute as much stuff as possible for reduction.
         """
         cv = self.c*v
@@ -98,90 +134,160 @@ class PartialBasis(object):
         l = len(self.vectors)
         self.vectors.append(e)
         self.cv.append(abs(cv))
-        self.Av.append(A*e)
-        self.psupp.append(set(e.support()))
+        self.Av.append(self.A*e)
         if l: # true if this is not the first vector
             for i in xrange(l):
                 self.pairs.append((i,l))
-        
-        
+                
+    def pop_element(self, i):
+        self.vectors.pop(i)
+        self.cv.pop(i)
+        self.Av.pop(i)
+        # for (j,p) in self.pairs:
+        #     if i in p:
+        #         self.pairs.pop(j)
+                
     def criterion_1(self, i, j):
-        """True if (i,j) is skipabble."""
-        t = len(self.psupp[i].intersection(self.psupp[j]))==0
-        return t
-        
-    def max(self, i, j):
-        """docstring for max"""
-        return vector(ZZ, [max(self.vecp[i][k],self.vecp[j][k]) for k in xrange(self.n)])
-        
+        """True if (i,j) is skipabble:
+        The S-poly of the pair (i,j) is skippable if 
+        its leading terms are disjoint.
+        """
+        # print self.vectors[i], self.vectors[j], self.Av[i], self.Av[j]
+        return   (
+            (disjoint_pp(self.Av[i], self.Av[j])) and
+            disjoint_pp(self.vectors[i], self.vectors[j]) and 
+            disjoint_mm(self.vectors[i], self.vectors[j]) 
+            )
+
+    def criterion_3(self, i, j):
+        """Malkin's criterion."""
+        # print self.vectors[i], self.vectors[j], self.Av[i], self.Av[j]
+        return   (
+            (not disjoint_mm(self.Av[i], self.Av[j])) or
+            (not disjoint_pp(self.vectors[i], self.vectors[j])) or
+            (not disjoint_mm(self.vectors[i], self.vectors[j]))
+            )
+        # return (
+        #     (not disjoint_mm(self.Av[i], self.Av[j])) or
+        #     (not disjoint_mm(self.vectors[i], self.vectors[j]))
+        #     )
+
+
     def criterion_2(self, i, j):
         """Gebauer and Möller"""
         # it is assumed i<j
-        t = self.max(i,j)
-        indices = [k for k in range(len(self.vectors)) if k!=i and k!=j]
-        for k in indices:
-            if let(self.vecp[k], t):
-                if k<i:
-                    return True
-                else:
-                    y = self.max(k,i) != t
-                    if i<k<j and y:
-                        return True
-                    elif k<j and y:
-                        if self.max(k,j)!= t:
-                            return True
+        Av = self.Av
+        v = self.vectors
+        for k in xrange(i):
+            if  max_ppp(Av[k], Av[i], Av[j]) and max_ppp(v[k], v[i], v[j]) and max_mmm(v[k], v[i], v[j]):
+                return True
+        #
+        for k in xrange(i+1,j):
+            if  (
+            max_ppp(Av[k], Av[i], Av[j]) and max_ppp(v[k], v[i], v[j]) and max_mmm(v[k], v[i], v[j])
+            and
+            ne_max_max(Av[k], Av[i], Av[j]) and  ne_max_max(v[k],v[i],v[j]) and ne_max_max_minus(v[k], v[i], v[j])
+            ):
+                return True
+        #
+        for k in xrange(j+1,len(self.vectors)):
+            if  (
+            max_ppp(Av[k], Av[i], Av[j]) and max_ppp(v[k], v[i], v[j]) and max_mmm(v[k], v[i], v[j])
+            and
+            ne_max_max(Av[k], Av[i], Av[j]) and  ne_max_max(v[k],v[i],v[j]) and ne_max_max_minus(v[k], v[i], v[j])
+            and
+            ne_max_max(Av[k], Av[j], Av[i]) and  ne_max_max(v[k],v[j],v[i]) and ne_max_max_minus(v[k], v[j], v[i])            
+            ):
+        
+                return True
+        
         return False
-                        
         
-        
+
     def reduce_by_ith(self, s, i):
         """
-        z is assumed to be an s-polynomial
-        
+        It modifies s in place!!!
+
         If s is not reducible by vectors[i], return False.
         Else, if s is reducible by vectors[i], return z reduced
         as many times as possible by vectors[i].
-        
-        Note that the return value might be the zero vector, so that
-        
-        
+
+        Note that the return value might be the zero vector, so 
+        test reduce_by_ith(i,j) is False for non reducibility.
         
         """
         round = 0
         v = self.vectors[i]
         Av = self.Av[i]
-        
+
         w = s
-        
-        # if w == v or w == -v: return vector(ZZ,self.n*[0])
-    
-        while not isz(w):
-            Aw = A*w
+
+        if isz(w): return w
+
+        while True:
+            Aw = self.A*w
             if let_pp(v,w) and let_mm(v,w) and let_pp(Av, Aw):
                 # w is reducible
                 round += 1
-                w = w-v
+                # w = w-v
+                for k in xrange(self.n):
+                    w[k]-=v[k]
             elif let_pm(v,w) and let_mp(v,w) and let_pm(Av, Aw):
                 # -w is reducible
                 # print "-", w, -w-v
                 round += 1
-                w = -w-v
+                # w = -w-v
+                for k in xrange(self.n):
+                    w[k]=-w[k]-v[k]
             else:
                 # no reducibility
                 break
-    
+
         if round == 0:
             return False
         else:
             # print "%s rounds !" % round
             return w
-        
-    def reduce(self, v):
+
+
+    def self_reduce(self):
+        """self_reduce the basis."""
+        b = len(self.vectors)
+        i = 0
+        while i<b:
+            l = range(b)
+            l.pop(i)
+            l = deque(l)
+            l.rotate(-i)
+            # print i, l
+            w = self.reduce(self.vectors[i], by=l)
+            if isz(w):
+                # remove this element
+                self.pop_element(i)
+                b -= 1
+            else:
+                # w might have been modified in-place!!!!
+                cw = self.c*w
+                if cw<0:
+                    for (k,wi) in enumerate(w):
+                        self.vectors[i][k]=-w[k]
+                self.Av[i] = self.A*w
+                self.cv[i] = cw
+                i +=1
+            
+
+
+    def reduce(self, v, by=None):
         """reduce"""
         # print "r->:", v
         l = len(self.vectors)
-        indices = deque(range(l))
+        if by is None:
+            indices = deque(range(l))
+        else:
+            indices = deque(by)
+        l = len(indices)
         i = 0
+        # w = copy(v)
         w = v
         while i<l and not isz(w):
             # print '.',
@@ -195,79 +301,107 @@ class PartialBasis(object):
                 w = r
         # print "r<-:", w
         return w
-        
-        
+
+
     def unfinished(self):
         """ """
         return len(self.pairs)
-        
-        
-    def pop(self):
+
+
+    def next_pair(self):
         """docstring for pop"""
         return self.pairs.pop()
-            
-    
+
+
 def bubu(A,b,c,u):
     A = matrix(ZZ,A)
     b = vector(ZZ, b)
     c = vector(ZZ,c)
-    u = vector(ZZ,u) 
+    u = vector(ZZ,u)
     m, n = A.dimensions()
     conditions = [m == len(b), n == len(c), n == len(u) ]
-    
+
     if not all(conditions):
         raise ValueError("Not all conditions met %s" %conditions)
-    
+
+    # pdb.set_trace()
     g = PartialBasis(A, c, b, u)
     c1 = 0
     c2 = 0
+    c3 = 0
     rx = 0
     elig = 0
     equ = 0
-    
+    z = 0
+
     while g.unfinished():
-        if len(g.vectors)>100: break
-        i, j = g.pop()
-        if g.criterion_1(i,j): 
+        # if len(g.vectors)>160: break
+        i, j = g.next_pair()
+            
+        if g.criterion_1(i,j):
             c1 += 1
-            next
-        # if g.criterion_2(i,j):
-        #     c2 += 1
-        #     next
+            # print "c1", g.vectors[i]-g.vectors[j]
+            continue
+
+        if g.criterion_3(i,j):
+            c3 += 1
+            # print "c3", g.vectors[i]-g.vectors[j]
+            continue
+
+        if g.criterion_2(i,j): # (Simplified) Gebauer and Möller criterion
+            c2 += 1
+            # print "c2", g.vectors[i]-g.vectors[j]
+            continue
         
-        
-        cv = g.cv[i]
-        cw = g.cv[j]
-        if cv == cw:
-            equ +=1
-            next
-        elif cw < cv:
+        if g.cv[j] == g.cv[i]: # ignore (Is this criterion 4?).
+            equ += 1
+            continue
+
+        if g.cv[j] < g.cv[i]: # set them in c-order
             i, j = j, i
+            
         # At this point, cv < cw.
         # 2.2.1
-        #if g.eligible[i]:
         r = g.vectors[j]-g.vectors[i]
         Ar = A*r
-        # rp,rm = pm_split(r)
-        if let_pp(r,u) and let_mp(r,u) and let_pp(Ar,b) and let_mp(Ar,b) :
+        # Changed criterion!!!!
+        # my criterion
+        # if let_pp(r,u) and let_mp(r,u) and let_pp(Ar,b) and let_mp(Ar,b) :
+        # T-W criterion
+        if let_pp(g.vectors[i],g.u) and let_mp(g.vectors[i],u) and let_pp(g.Av[i],g.b) and let_mp(g.Av[i], b):
             rx +=1
+            if (rx%1000) == 0:
+                print "reduction: %s, basis: %s." % (rx, len(g.vectors))
             c = g.reduce(r)
             if not isz(c):
                 g.add_element(c)
-                # print "+", c
-                # print g.vectors
+            else:
+                z += 1
         else:
+            # print r
             elig += 1
-            next
-            
-    print "%s criterion 1, %s criterion 2, %s reductions, %s non eligible, %s equalities" % (c1, c2, rx, elig, equ)
+            continue
+
+    print "%s criterion 1, %s criterion 2, %s criterion 3, %s non eligible, %s equalities, %s reductions, of which %s to zero" % (c1, c2, c3, elig, equ, rx, z)
     return g.vectors, g
-    
-    
-    
-    
+
+
+
+
 A1 = matrix(ZZ, [[3,1,11,2,3,5,3], [4, 5, 0, 1, 7,4, 6], [5,6,1,9,2,3,3]])
 c1 = vector(ZZ, [23,15,6,7,1,53,4])
 b1 = vector(ZZ, [31,27,38])
 u1 = vector(ZZ, 7*[38])
-    
+
+
+B = matrix(ZZ, [
+[9, 6, 6, 8, 3, 6, 2, 4, 6, 3, 9, 4, 4, 8, 6, 9, 4, 2, 8, 8],
+[8, 8, 0, 5, 4, 4, 7, 0, 2, 3, 0, 6, 7, 7, 0, 6, 7, 8, 6, 0],
+[0, 9, 4, 1, 2, 0, 6, 5, 8, 5, 5, 5, 0, 0, 9, 3, 1, 8, 4, 8],
+[5, 0, 1, 6, 0, 7, 7, 5, 8, 0, 2, 7, 3, 9, 0, 6, 9, 8, 7, 3],
+[3, 0, 2, 7, 5, 8, 1, 2, 1, 5, 7, 8, 3, 8, 4, 3, 6, 2, 9, 3],
+])
+c2 = vector(ZZ,[3, 2, 9, 1, 7, 5, 6, 2, 7, 8, 6, 9, 2, 6, 8, 7, 6, 2, 2, 1])
+b2 = vector(ZZ, 5*[50])
+u2 = vector(ZZ, 20*[1])
+
