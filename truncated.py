@@ -6,7 +6,7 @@ import pdb
 def getz(v):
         """Check if v is greater or equal than zero, component-wise."""
         # return all(vi>=0 for vi in v) #(Slower by a factor of 2)
-        for vi in v:
+        for vi in v: 
             if vi<0: return False
         return True
 
@@ -57,7 +57,7 @@ def disjoint_pp(v, w):
     """true if v^+ and w^+ have disjoint support."""
     return not set(i for i in xrange(len(v)) if v[i]>0).intersection(
         j for j in xrange(len(w)) if w[j]>0)
-    
+
 def disjoint_mm(v, w):
     """true if v^- and w^- have disjoint support."""
     # return not set(i for i in xrange(len(v)) if v[i]<0).intersection(
@@ -68,7 +68,7 @@ def disjoint_mm(v, w):
 def max_ppp(z, u, w):
     """check that z^+ ≤ u^+ ∨ v^+"""
     for l in xrange(len(z)):
-        if z[l]>0 and  z[l]> max(u[l],w[l],0):
+        if z[l]>0 and z[l]>max(u[l],w[l],0):
             return False
     return True
 
@@ -138,7 +138,7 @@ class PartialBasis(object):
         if l: # true if this is not the first vector
             for i in xrange(l):
                 self.pairs.append((i,l))
-                
+
     def pop_element(self, i):
         self.vectors.pop(i)
         self.cv.pop(i)
@@ -146,17 +146,17 @@ class PartialBasis(object):
         # for (j,p) in self.pairs:
         #     if i in p:
         #         self.pairs.pop(j)
-                
+
     def criterion_1(self, i, j):
         """True if (i,j) is skipabble:
-        The S-poly of the pair (i,j) is skippable if 
+        The S-poly of the pair (i,j) is skippable if
         its leading terms are disjoint.
         """
         # print self.vectors[i], self.vectors[j], self.Av[i], self.Av[j]
         return   (
             (disjoint_pp(self.Av[i], self.Av[j])) and
-            disjoint_pp(self.vectors[i], self.vectors[j]) and 
-            disjoint_mm(self.vectors[i], self.vectors[j]) 
+            disjoint_pp(self.vectors[i], self.vectors[j]) and
+            disjoint_mm(self.vectors[i], self.vectors[j])
             )
 
     def criterion_3(self, i, j):
@@ -196,58 +196,87 @@ class PartialBasis(object):
             and
             ne_max_max(Av[k], Av[i], Av[j]) and  ne_max_max(v[k],v[i],v[j]) and ne_max_max_minus(v[k], v[i], v[j])
             and
-            ne_max_max(Av[k], Av[j], Av[i]) and  ne_max_max(v[k],v[j],v[i]) and ne_max_max_minus(v[k], v[j], v[i])            
+            ne_max_max(Av[k], Av[j], Av[i]) and  ne_max_max(v[k],v[j],v[i]) and ne_max_max_minus(v[k], v[j], v[i])
             ):
-        
-                return True
-        
-        return False
-        
 
-    def reduce_by_ith(self, s, i):
+                return True
+
+        return False
+
+
+    def reduce_by_ith(self, s, As, i):
         """
         It modifies s in place!!!
 
-        If s is not reducible by vectors[i], return False.
-        Else, if s is reducible by vectors[i], return z reduced
+        If ±s is not reducible by vectors[i], return False.
+        Else, if s is reducible by vectors[i], return ±s reduced
         as many times as possible by vectors[i].
 
-        Note that the return value might be the zero vector, so 
+        Note that the return value might be the zero vector, so
         test reduce_by_ith(i,j) is False for non reducibility.
-        
+
         """
         round = 0
         v = self.vectors[i]
         Av = self.Av[i]
 
         w = s
+        Aw = As
 
-        if isz(w): return w
+        if isz(w): return w, Aw
 
         while True:
-            Aw = self.A*w
             if let_pp(v,w) and let_mm(v,w) and let_pp(Av, Aw):
                 # w is reducible
                 round += 1
-                # w = w-v
+                # w = w-v, but modify in place.
                 for k in xrange(self.n):
                     w[k]-=v[k]
+                # Aw = Aw-Av
+                for k in xrange(len(Aw)):
+                    Aw[k] -= Av[k]
             elif let_pm(v,w) and let_mp(v,w) and let_pm(Av, Aw):
                 # -w is reducible
-                # print "-", w, -w-v
                 round += 1
-                # w = -w-v
+                # w = -w-v 
                 for k in xrange(self.n):
                     w[k]=-w[k]-v[k]
+                # Aw = -A*w-A*v
+                for k in xrange(len(Aw)):
+                    Aw[k] = -Aw[k]-Av[k]
             else:
                 # no reducibility
                 break
 
         if round == 0:
-            return False
+            return False, False
         else:
-            # print "%s rounds !" % round
-            return w
+            return w, Aw
+
+
+    def reduce(self, v, by=None):
+        """reduce"""
+        l = len(self.vectors)
+        if by is None:
+            indices = deque(range(l))
+        else:
+            indices = deque(by)
+        l = len(indices)
+        i = 0
+        w = v
+        Aw = self.A*w
+        while i<l and not isz(w):
+            r, Ar = self.reduce_by_ith(w, Aw ,indices[i])
+            if r is False:
+                i += 1
+            else: 
+                # i.e, if r is a true reduction.
+                # rotate the list and start over
+                indices.rotate(i+1)
+                i = 0
+                w = r
+                Aw = Ar
+        return w
 
 
     def self_reduce(self):
@@ -260,7 +289,7 @@ class PartialBasis(object):
             l = deque(l)
             l.rotate(-i)
             # print i, l
-            w = self.reduce(self.vectors[i], by=l)
+            w = self.reduce(copy(self.vectors[i]), by=l)
             if isz(w):
                 # remove this element
                 self.pop_element(i)
@@ -274,33 +303,8 @@ class PartialBasis(object):
                 self.Av[i] = self.A*w
                 self.cv[i] = cw
                 i +=1
-            
 
 
-    def reduce(self, v, by=None):
-        """reduce"""
-        # print "r->:", v
-        l = len(self.vectors)
-        if by is None:
-            indices = deque(range(l))
-        else:
-            indices = deque(by)
-        l = len(indices)
-        i = 0
-        # w = copy(v)
-        w = v
-        while i<l and not isz(w):
-            # print '.',
-            r = self.reduce_by_ith(w,indices[i])
-            if r is False:
-                i += 1
-            else: # i.e, if r is a true reduction.
-                # rotate the list and start over
-                indices.rotate(i+1)
-                i = 0
-                w = r
-        # print "r<-:", w
-        return w
 
 
     def unfinished(self):
@@ -335,9 +339,9 @@ def bubu(A,b,c,u):
     z = 0
 
     while g.unfinished():
-        # if len(g.vectors)>160: break
+        # if len(g.vectors)>200: break
         i, j = g.next_pair()
-            
+
         if g.criterion_1(i,j):
             c1 += 1
             # print "c1", g.vectors[i]-g.vectors[j]
@@ -348,27 +352,28 @@ def bubu(A,b,c,u):
             # print "c3", g.vectors[i]-g.vectors[j]
             continue
 
-        if g.criterion_2(i,j): # (Simplified) Gebauer and Möller criterion
-            c2 += 1
-            # print "c2", g.vectors[i]-g.vectors[j]
-            continue
-        
+        # This might be wrong!
         if g.cv[j] == g.cv[i]: # ignore (Is this criterion 4?).
             equ += 1
             continue
 
+        if g.criterion_2(i,j): # Gebauer and Möller criterion
+            c2 += 1
+            # print "c2", g.vectors[i]-g.vectors[j]
+            continue
+            
         if g.cv[j] < g.cv[i]: # set them in c-order
             i, j = j, i
-            
+
         # At this point, cv < cw.
         # 2.2.1
         r = g.vectors[j]-g.vectors[i]
-        Ar = A*r
         # Changed criterion!!!!
         # my criterion
-        # if let_pp(r,u) and let_mp(r,u) and let_pp(Ar,b) and let_mp(Ar,b) :
+        Ar = A*r
+        if let_pp(r,u) and let_mp(r,u) and let_pp(Ar,b) and let_mp(Ar,b) :
         # T-W criterion
-        if let_pp(g.vectors[i],g.u) and let_mp(g.vectors[i],u) and let_pp(g.Av[i],g.b) and let_mp(g.Av[i], b):
+        # if let_pp(g.vectors[i],g.u) and let_mp(g.vectors[i],g.u) and let_pp(g.Av[i],g.b) and let_mp(g.Av[i], g.b) :
             rx +=1
             if (rx%1000) == 0:
                 print "reduction: %s, basis: %s." % (rx, len(g.vectors))
