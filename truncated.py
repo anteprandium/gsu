@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 from collections import deque
-import pdb
+
+
 
 def getz(v):
         """Check if v is greater or equal than zero, component-wise."""
@@ -12,14 +13,15 @@ def getz(v):
 
 def isz(v):
         """Check if v is zero. Slightly faster than .is_zero()"""
-        # return all(vi>=0 for vi in v) #(Slower by a factor of 2)
+        # # # return all(vi>=0 for vi in v) #(Slower by a factor of 2)
         for vi in v:
             if vi!=0: return False
         return True
+        # return v.is_zero()
 
 
 def let(a,b):
-    "True if and only if a is less or equal than b. Faster than zipping lists by a factor of 100"
+    "True if and only if a is less or equal than b. Faster than zipping lists"
     for i in xrange(len(a)):
         if a[i]>b[i]:
             return False
@@ -112,7 +114,7 @@ class PartialBasis(object):
     """docstring for PartialBasis"""
     def __init__(self, A, c, b, u):
         super(PartialBasis, self).__init__()
-        self.n = A.dimensions()[1]
+        self.d, self.n = A.dimensions()
         self.A = A
         self.c = c
         self.b = b
@@ -121,8 +123,14 @@ class PartialBasis(object):
         self.cv = []
         self.Av = []
         self.pairs = []
+        self.zerox = vector(ZZ,self.n*[0])
+        self.zerob = vector(ZZ, self.d*[0])
         for e in identity_matrix(ZZ,self.n).rows():
             self.add_element(e)
+            
+    # def set_to_Au(self, v, u):
+    #     """set vector v to A*u"""
+        
 
     def add_element(self, v):
         """
@@ -206,7 +214,7 @@ class PartialBasis(object):
 
     def reduce_by_ith(self, s, As, i):
         """
-        It modifies s in place!!!
+        It modifies s and As in place!!!
 
         If ±s is not reducible by vectors[i], return False.
         Else, if s is reducible by vectors[i], return ±s reduced
@@ -235,15 +243,23 @@ class PartialBasis(object):
                 # Aw = Aw-Av
                 for k in xrange(len(Aw)):
                     Aw[k] -= Av[k]
+                # # slower alternative:
+                # w -= v
+                # Aw -= Av
             elif let_pm(v,w) and let_mp(v,w) and let_pm(Av, Aw):
                 # -w is reducible
                 round += 1
-                # w = -w-v 
+                # w = -w-v
                 for k in xrange(self.n):
                     w[k]=-w[k]-v[k]
                 # Aw = -A*w-A*v
                 for k in xrange(len(Aw)):
                     Aw[k] = -Aw[k]-Av[k]
+                # # slower:
+                # w *= -1
+                # w -=v
+                # Aw *= -1
+                # Av -= Av
             else:
                 # no reducibility
                 break
@@ -251,6 +267,10 @@ class PartialBasis(object):
         if round == 0:
             return False, False
         else:
+            
+            
+            
+            
             return w, Aw
 
 
@@ -265,6 +285,9 @@ class PartialBasis(object):
         i = 0
         w = v
         Aw = self.A*w
+        # Aw = copy(self.zerob)
+        # for k in xrange(self.d):
+        #     Aw[k] = sum(self.A[k,l]*w[l] for l in xrange(self.n))
         while i<l and not isz(w):
             r, Ar = self.reduce_by_ith(w, Aw ,indices[i])
             if r is False:
@@ -279,32 +302,30 @@ class PartialBasis(object):
         return w
 
 
-    def self_reduce(self):
-        """self_reduce the basis."""
-        b = len(self.vectors)
-        i = 0
-        while i<b:
-            l = range(b)
-            l.pop(i)
-            l = deque(l)
-            l.rotate(-i)
-            # print i, l
-            w = self.reduce(copy(self.vectors[i]), by=l)
-            if isz(w):
-                # remove this element
-                self.pop_element(i)
-                b -= 1
-            else:
-                # w might have been modified in-place!!!!
-                cw = self.c*w
-                if cw<0:
-                    for (k,wi) in enumerate(w):
-                        self.vectors[i][k]=-w[k]
-                self.Av[i] = self.A*w
-                self.cv[i] = cw
-                i +=1
-
-
+    # def self_reduce(self):
+    #     """self_reduce the basis."""
+    #     b = len(self.vectors)
+    #     i = 0
+    #     while i<b:
+    #         l = range(b)
+    #         l.pop(i)
+    #         l = deque(l)
+    #         l.rotate(-i)
+    #         # print i, l
+    #         w = self.reduce(copy(self.vectors[i]), by=l)
+    #         if isz(w):
+    #             # remove this element
+    #             self.pop_element(i)
+    #             b -= 1
+    #         else:
+    #             # w might have been modified in-place!!!!
+    #             cw = self.c*w
+    #             if cw<0:
+    #                 for (k,wi) in enumerate(w):
+    #                     self.vectors[i][k]=-w[k]
+    #             self.Av[i] = self.A*w
+    #             self.cv[i] = cw
+    #             i +=1
 
 
     def unfinished(self):
@@ -315,6 +336,53 @@ class PartialBasis(object):
     def next_pair(self):
         """docstring for pop"""
         return self.pairs.pop()
+        
+    def pm_split(v):
+        """ slightly faster than pm_split2"""
+        up = copy(self.zerox)
+        um = copy(self.zerox)
+        for i,a in enumerate(v):
+            if a>0:
+                up[i]=a
+            elif a<0:
+                um[i]=-a
+        return up, um
+        
+    def feasible(self, v):
+        """docstring for feasible"""
+        if let_pp(v,self.u) and let_mp(v,self.u):
+            avp, avm = pm_split(v)
+            return let(self.A*avp, self.b) and let(self.A*avm, self.b)
+        return False
+    
+    def order(self, i,j):
+        """
+        Set i, j in gr-rev-lex order:
+
+        vi > vj if c*vi > c*vj or
+                    equality and the last nonzero coordinate of vi-vj is negative.
+
+        We sort indices and not vectors so that we don't have to compute
+        c*v and c*v more than once.
+        """
+        if self.cv[i]>self.cv[j]:
+            return (i,j)
+        elif self.cv[i]<self.cv[j]:
+            return (j,i)
+        else: # equal cost :(
+            u = self.vectors[i]
+            v = self.vectors[j]
+            for k in xrange(self.n):
+                l = self.n-k-1
+                if u[l] > v[l] :
+                    return (j,i)
+                elif u[l] < v[l] :
+                    return (i,j)
+            # The vectors are equal. This should never happen:
+            raise RuntimeError("Vectors %s and %s are equal (%s and %s)" % (i,j,self.vectors[i], self.vectors[j]))
+    
+
+
 
 
 def bubu(A,b,c,u):
@@ -335,8 +403,8 @@ def bubu(A,b,c,u):
     c3 = 0
     rx = 0
     elig = 0
-    equ = 0
     z = 0
+    
 
     while g.unfinished():
         # if len(g.vectors)>200: break
@@ -344,36 +412,28 @@ def bubu(A,b,c,u):
 
         if g.criterion_1(i,j):
             c1 += 1
-            # print "c1", g.vectors[i]-g.vectors[j]
             continue
 
         if g.criterion_3(i,j):
             c3 += 1
-            # print "c3", g.vectors[i]-g.vectors[j]
-            continue
-
-        # This might be wrong!
-        if g.cv[j] == g.cv[i]: # ignore (Is this criterion 4?).
-            equ += 1
             continue
 
         if g.criterion_2(i,j): # Gebauer and Möller criterion
             c2 += 1
-            # print "c2", g.vectors[i]-g.vectors[j]
             continue
             
-        if g.cv[j] < g.cv[i]: # set them in c-order
-            i, j = j, i
+        i,j = g.order(i,j)
+        
 
         # At this point, cv < cw.
         # 2.2.1
-        r = g.vectors[j]-g.vectors[i]
-        # Changed criterion!!!!
-        # my criterion
-        Ar = A*r
-        if let_pp(r,u) and let_mp(r,u) and let_pp(Ar,b) and let_mp(Ar,b) :
-        # T-W criterion
-        # if let_pp(g.vectors[i],g.u) and let_mp(g.vectors[i],g.u) and let_pp(g.Av[i],g.b) and let_mp(g.Av[i], g.b) :
+        # r = g.vectors[i]
+        # r -= g.vectors[j]
+        r = copy(g.zerox)
+        for l in xrange(g.n):
+            r[l] = g.vectors[j][l]-g.vectors[i][l]
+            
+        if g.feasible(r):
             rx +=1
             if (rx%1000) == 0:
                 print "reduction: %s, basis: %s." % (rx, len(g.vectors))
@@ -387,7 +447,7 @@ def bubu(A,b,c,u):
             elig += 1
             continue
 
-    print "%s criterion 1, %s criterion 2, %s criterion 3, %s non eligible, %s equalities, %s reductions, of which %s to zero" % (c1, c2, c3, elig, equ, rx, z)
+    print "%s criterion 1, %s criterion 2, %s criterion 3, %s non feasible,  %s reductions, of which %s to zero" % (c1, c2, c3, elig, rx, z)
     return g.vectors, g
 
 
