@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from collections import deque
-
+import pdb
 
 
 def getz(v):
@@ -73,7 +73,12 @@ def max_ppp(z, u, w):
         if z[l]>0 and z[l]>max(u[l],w[l],0):
             return False
     return True
-
+    #
+    # for (l,v) in enumerate(z):
+    #     if v>0 and v>max(u[l],w[l],0):
+    #         return False
+    # return True
+        
 def max_mmm(z, u, w):
     """check that z^- ≤ u^- ∨ v^-"""
     for l in xrange(len(z)):
@@ -108,6 +113,9 @@ def pm_split(v):
         else:
             um[i]=-a
     return vector(ZZ,up), vector(ZZ,um)
+    
+    
+        
 
 
 class PartialBasis(object):
@@ -123,26 +131,70 @@ class PartialBasis(object):
         self.cv = []
         self.Av = []
         self.pairs = []
+        #
+        self.vectors_p = []
+        self.vectors_m = []
+        self.Av_p = []
+        self.Av_m = []
+        #
         self.zerox = vector(ZZ,self.n*[0])
         self.zerob = vector(ZZ, self.d*[0])
         for e in identity_matrix(ZZ,self.n).rows():
             self.add_element(e)
+    
+    
+    def supports(self, v):
+        p, n = [], []
+        for (i,c) in enumerate(v):
+            if c>0:
+                p.append(i)
+            elif c<0:
+                n.append(i)
+        return (p,n)
             
-    # def set_to_Au(self, v, u):
-    #     """set vector v to A*u"""
-        
+    def binomial_order(self, b):
+        """docstring for binomial_order"""
+        c = b*self.c
+        minux = False
+        if c<0:
+            minux = True
+        elif c == 0:
+            for k in xrange(self.n):
+                l = self.n-k-1
+                if b[l]>0:
+                    minux = True
+                    break
+                elif b[l]<0:
+                    minux = False
+                    break
+            else:
+                raise RuntimeError("Sorting the zero vector!! %s" % v)
+        if minux:
+            for (i,v) in enumerate(b):
+                b[i] *= -1
+        return abs(c)
+            
+            
 
-    def add_element(self, v):
+    def add_element(self, e):
         """
         add element e to partial basis, update critical pairs to be computed,
         and precompute as much stuff as possible for reduction.
         """
-        cv = self.c*v
-        e = v if cv>0 else -v  # this makes sure that e^+ >_c e^-.
+        c = self.binomial_order(e)
         l = len(self.vectors)
+        Av = self.A*e
+        p,m = self.supports(e)
+        Ap,Am = self.supports(Av)
+        
         self.vectors.append(e)
-        self.cv.append(abs(cv))
-        self.Av.append(self.A*e)
+        self.cv.append(abs(c))
+        self.Av.append(Av)
+        self.vectors_p.append(set(p))
+        self.vectors_m.append(set(m))
+        self.Av_p.append(set(Ap))
+        self.Av_m.append(set(Am))
+        
         if l: # true if this is not the first vector
             for i in xrange(l):
                 self.pairs.append((i,l))
@@ -151,6 +203,10 @@ class PartialBasis(object):
         self.vectors.pop(i)
         self.cv.pop(i)
         self.Av.pop(i)
+        self.vectors_p.pop(i)
+        self.vectors_m.pop(i)
+        self.Av_m.pop(i)
+        self.Av_p.pop(i)
         # for (j,p) in self.pairs:
         #     if i in p:
         #         self.pairs.pop(j)
@@ -161,24 +217,31 @@ class PartialBasis(object):
         its leading terms are disjoint.
         """
         # print self.vectors[i], self.vectors[j], self.Av[i], self.Av[j]
-        return   (
-            (disjoint_pp(self.Av[i], self.Av[j])) and
-            disjoint_pp(self.vectors[i], self.vectors[j]) and
-            disjoint_mm(self.vectors[i], self.vectors[j])
-            )
+        # return   (
+        #     (disjoint_pp(self.Av[i], self.Av[j])) and
+        #     disjoint_pp(self.vectors[i], self.vectors[j]) and
+        #     disjoint_mm(self.vectors[i], self.vectors[j])
+        #     )
+        # pdb.set_trace()
+        return not (
+            bool(self.Av_p[i].intersection(self.Av_p[j])) or
+            bool(self.vectors_p[i].intersection(self.vectors_p[j])) or
+            bool(self.vectors_m[i].intersection(self.vectors_m[j]))
+        )   
 
     def criterion_3(self, i, j):
         """Malkin's criterion."""
         # print self.vectors[i], self.vectors[j], self.Av[i], self.Av[j]
-        return   (
-            (not disjoint_mm(self.Av[i], self.Av[j])) or
-            (not disjoint_pp(self.vectors[i], self.vectors[j])) or
-            (not disjoint_mm(self.vectors[i], self.vectors[j]))
-            )
-        # return (
+        # return   (
         #     (not disjoint_mm(self.Av[i], self.Av[j])) or
+        #     (not disjoint_pp(self.vectors[i], self.vectors[j])) or
         #     (not disjoint_mm(self.vectors[i], self.vectors[j]))
         #     )
+        return (
+            bool(self.Av_m[i].intersection(self.Av_m[j])) or
+            bool(self.vectors_p[i].intersection(self.vectors_p[j])) or
+            bool(self.vectors_m[i].intersection(self.vectors_m[j]))
+        )
 
 
     def criterion_2(self, i, j):
@@ -302,30 +365,30 @@ class PartialBasis(object):
         return w
 
 
-    # def self_reduce(self):
-    #     """self_reduce the basis."""
-    #     b = len(self.vectors)
-    #     i = 0
-    #     while i<b:
-    #         l = range(b)
-    #         l.pop(i)
-    #         l = deque(l)
-    #         l.rotate(-i)
-    #         # print i, l
-    #         w = self.reduce(copy(self.vectors[i]), by=l)
-    #         if isz(w):
-    #             # remove this element
-    #             self.pop_element(i)
-    #             b -= 1
-    #         else:
-    #             # w might have been modified in-place!!!!
-    #             cw = self.c*w
-    #             if cw<0:
-    #                 for (k,wi) in enumerate(w):
-    #                     self.vectors[i][k]=-w[k]
-    #             self.Av[i] = self.A*w
-    #             self.cv[i] = cw
-    #             i +=1
+    def self_reduce(self):
+        """self_reduce the basis."""
+        b = len(self.vectors)
+        i = 0
+        while i<b:
+            l = range(b)
+            l.pop(i)
+            l = deque(l)
+            l.rotate(-i)
+            # print i, l
+            w = self.reduce(copy(self.vectors[i]), by=l)
+            if isz(w):
+                # remove this element
+                self.pop_element(i)
+                b -= 1
+            else:
+                # w might have been modified in-place!!!!
+                cw = self.c*w
+                if cw<0:
+                    for (k,wi) in enumerate(w):
+                        self.vectors[i][k]=-w[k]
+                self.Av[i] = self.A*w
+                self.cv[i] = cw
+                i +=1
 
 
     def unfinished(self):
@@ -422,7 +485,7 @@ def bubu(A,b,c,u):
             c2 += 1
             continue
             
-        i,j = g.order(i,j)
+       
         
 
         # At this point, cv < cw.
@@ -432,6 +495,8 @@ def bubu(A,b,c,u):
         r = copy(g.zerox)
         for l in xrange(g.n):
             r[l] = g.vectors[j][l]-g.vectors[i][l]
+        g.binomial_order(r)
+        
             
         if g.feasible(r):
             rx +=1
