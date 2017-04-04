@@ -114,8 +114,6 @@ def pm_split(v):
             um[i]=-a
     return vector(ZZ,up), vector(ZZ,um)
     
-    
-        
 
 
 class PartialBasis(object):
@@ -216,13 +214,6 @@ class PartialBasis(object):
         The S-poly of the pair (i,j) is skippable if
         its leading terms are disjoint.
         """
-        # print self.vectors[i], self.vectors[j], self.Av[i], self.Av[j]
-        # return   (
-        #     (disjoint_pp(self.Av[i], self.Av[j])) and
-        #     disjoint_pp(self.vectors[i], self.vectors[j]) and
-        #     disjoint_mm(self.vectors[i], self.vectors[j])
-        #     )
-        # pdb.set_trace()
         return not (
             bool(self.Av_p[i].intersection(self.Av_p[j])) or
             bool(self.vectors_p[i].intersection(self.vectors_p[j])) or
@@ -231,12 +222,6 @@ class PartialBasis(object):
 
     def criterion_3(self, i, j):
         """Malkin's criterion."""
-        # print self.vectors[i], self.vectors[j], self.Av[i], self.Av[j]
-        # return   (
-        #     (not disjoint_mm(self.Av[i], self.Av[j])) or
-        #     (not disjoint_pp(self.vectors[i], self.vectors[j])) or
-        #     (not disjoint_mm(self.vectors[i], self.vectors[j]))
-        #     )
         return (
             bool(self.Av_m[i].intersection(self.Av_m[j])) or
             bool(self.vectors_p[i].intersection(self.vectors_p[j])) or
@@ -330,10 +315,6 @@ class PartialBasis(object):
         if round == 0:
             return False, False
         else:
-            
-            
-            
-            
             return w, Aw
 
 
@@ -400,7 +381,7 @@ class PartialBasis(object):
         """docstring for pop"""
         return self.pairs.pop()
         
-    def pm_split(v):
+    def pm_split(self, v):
         """ slightly faster than pm_split2"""
         up = copy(self.zerox)
         um = copy(self.zerox)
@@ -414,35 +395,10 @@ class PartialBasis(object):
     def feasible(self, v):
         """docstring for feasible"""
         if let_pp(v,self.u) and let_mp(v,self.u):
-            avp, avm = pm_split(v)
+            avp, avm = self.pm_split(v)
             return let(self.A*avp, self.b) and let(self.A*avm, self.b)
         return False
     
-    def order(self, i,j):
-        """
-        Set i, j in gr-rev-lex order:
-
-        vi > vj if c*vi > c*vj or
-                    equality and the last nonzero coordinate of vi-vj is negative.
-
-        We sort indices and not vectors so that we don't have to compute
-        c*v and c*v more than once.
-        """
-        if self.cv[i]>self.cv[j]:
-            return (i,j)
-        elif self.cv[i]<self.cv[j]:
-            return (j,i)
-        else: # equal cost :(
-            u = self.vectors[i]
-            v = self.vectors[j]
-            for k in xrange(self.n):
-                l = self.n-k-1
-                if u[l] > v[l] :
-                    return (j,i)
-                elif u[l] < v[l] :
-                    return (i,j)
-            # The vectors are equal. This should never happen:
-            raise RuntimeError("Vectors %s and %s are equal (%s and %s)" % (i,j,self.vectors[i], self.vectors[j]))
     
 
 
