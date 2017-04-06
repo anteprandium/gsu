@@ -1,13 +1,21 @@
 #!/usr/bin/env python
 
-from collections import deque
+from collections import deque 
+from itertools import izip
 import pdb
+
+
+def matprod(A,b):
+    return [sum(ai*bi for ai,bi in izip(row, b)) for row in A]
+    
+def dotprod(u,v):
+    return sum(ui*vi for (ui,vi) in izip(u,v))
 
 
 def getz(v):
         """Check if v is greater or equal than zero, component-wise."""
         # return all(vi>=0 for vi in v) #(Slower by a factor of 2)
-        for vi in v: 
+        for vi in v:
             if vi<0: return False
         return True
 
@@ -78,7 +86,7 @@ def max_ppp(z, u, w):
     #     if v>0 and v>max(u[l],w[l],0):
     #         return False
     # return True
-        
+
 def max_mmm(z, u, w):
     """check that z^- ≤ u^- ∨ v^-"""
     for l in xrange(len(z)):
@@ -113,7 +121,7 @@ def pm_split(v):
         else:
             um[i]=-a
     return vector(ZZ,up), vector(ZZ,um)
-    
+
 
 
 class PartialBasis(object):
@@ -139,8 +147,8 @@ class PartialBasis(object):
         self.zerob = vector(ZZ, self.d*[0])
         for e in identity_matrix(ZZ,self.n).rows():
             self.add_element(e)
-    
-    
+
+
     def supports(self, v):
         p, n = [], []
         for (i,c) in enumerate(v):
@@ -148,8 +156,8 @@ class PartialBasis(object):
                 p.append(i)
             elif c<0:
                 n.append(i)
-        return (p,n)
-            
+        return (set(p),set(n))
+
     def binomial_order(self, b):
         """docstring for binomial_order"""
         c = b*self.c
@@ -169,12 +177,12 @@ class PartialBasis(object):
                 raise RuntimeError("Sorting the zero vector!! %s" % v)
         if minux:
             for (i,v) in enumerate(b):
-                b[i] *= -1
+                b[i] = -v
         return abs(c)
-            
-            
 
-    def add_element(self, e):
+
+
+    def add_element(self, e, pos=None, pairs=True):
         """
         add element e to partial basis, update critical pairs to be computed,
         and precompute as much stuff as possible for reduction.
@@ -184,20 +192,33 @@ class PartialBasis(object):
         Av = self.A*e
         p,m = self.supports(e)
         Ap,Am = self.supports(Av)
-        
-        self.vectors.append(e)
-        self.cv.append(abs(c))
-        self.Av.append(Av)
-        self.vectors_p.append(set(p))
-        self.vectors_m.append(set(m))
-        self.Av_p.append(set(Ap))
-        self.Av_m.append(set(Am))
-        
-        if l: # true if this is not the first vector
-            for i in xrange(l):
-                self.pairs.append((i,l))
 
-    def pop_element(self, i):
+        if pos is None:
+            self.vectors.append(e)
+            self.cv.append(c)
+            self.Av.append(Av)
+            self.vectors_p.append(p)
+            self.vectors_m.append(m)
+            self.Av_p.append(Ap)
+            self.Av_m.append(Am)
+        else:
+            i = pos
+            self.vectors[i]=e
+            self.cv[i]=c
+            self.Av[i]=Av
+            self.vectors_p[i]=set(p)
+            self.vectors_m[i]=set(m)
+            self.Av_p[i]=Ap
+            self.Av_m[i]=Am
+
+
+
+        if pairs and l: # true if this is not the first vector
+            for i in xrange(l):
+                self.pairs.append([i,l])
+                
+
+    def pop_element(self, i, pairs=False):
         self.vectors.pop(i)
         self.cv.pop(i)
         self.Av.pop(i)
@@ -205,9 +226,37 @@ class PartialBasis(object):
         self.vectors_m.pop(i)
         self.Av_m.pop(i)
         self.Av_p.pop(i)
-        # for (j,p) in self.pairs:
-        #     if i in p:
-        #         self.pairs.pop(j)
+        if pairs:
+            j = 0
+            l = len(self.pairs) 
+            while j<l:
+                p = self.pairs[j]
+                if i==p[0] or i==p[1]:
+                    self.pairs.pop(j)
+                    # print "popped %s %s %s" % (j,p,i)
+                    l -= 1
+                elif i<p[0]:
+                    self.pairs[j] = [p[0]-1, p[1]-1]
+                    # print "displa %s %s %s new=%s" % (j,p,i, self.pairs[j])
+                    # if self.pairs[j][1]>=len(self.vectors):print 30*"-", "problem: %s at %s %s (len=%s)" % (i,j,p, len(self.vectors))
+                    
+                    j += 1
+                elif p[0]<i and i<p[1]:
+                    self.pairs[j] = [p[0], p[1]-1]
+                    # print "contra %s %s %s new=%s" % (j,p,i, self.pairs[j])
+                    # if self.pairs[j][1]>=len(self.vectors):print 30*"-", "problem: %s at %s %s (len=%s)" % (i,j,p, len(self.vectors))
+                    
+                    j += 1
+                else:
+                    # print "nothing at %s, %s, %s" % (j,p,i)
+                    j += 1
+                    
+                    
+        # print len(self.vectors)
+        # print self.pairs
+                    
+                
+
 
     def criterion_1(self, i, j):
         """True if (i,j) is skipabble:
@@ -218,7 +267,7 @@ class PartialBasis(object):
             bool(self.Av_p[i].intersection(self.Av_p[j])) or
             bool(self.vectors_p[i].intersection(self.vectors_p[j])) or
             bool(self.vectors_m[i].intersection(self.vectors_m[j]))
-        )   
+        )
 
     def criterion_3(self, i, j):
         """Malkin's criterion."""
@@ -279,29 +328,29 @@ class PartialBasis(object):
         w = s
         Aw = As
 
-        if isz(w): return w, Aw
+        # if isz(w): return w, Aw
 
         while True:
-            if let_pp(v,w) and let_mm(v,w) and let_pp(Av, Aw):
+            if let_pp(Av, Aw) and let_pp(v,w) and let_mm(v,w) :
                 # w is reducible
                 round += 1
                 # w = w-v, but modify in place.
                 for k in xrange(self.n):
                     w[k]-=v[k]
                 # Aw = Aw-Av
-                for k in xrange(len(Aw)):
+                for k in xrange(self.d):
                     Aw[k] -= Av[k]
                 # # slower alternative:
                 # w -= v
                 # Aw -= Av
-            elif let_pm(v,w) and let_mp(v,w) and let_pm(Av, Aw):
+            elif let_pm(Av, Aw) and let_pm(v,w) and let_mp(v,w) :
                 # -w is reducible
                 round += 1
                 # w = -w-v
                 for k in xrange(self.n):
                     w[k]=-w[k]-v[k]
                 # Aw = -A*w-A*v
-                for k in xrange(len(Aw)):
+                for k in xrange(self.d):
                     Aw[k] = -Aw[k]-Av[k]
                 # # slower:
                 # w *= -1
@@ -317,7 +366,6 @@ class PartialBasis(object):
         else:
             return w, Aw
 
-
     def reduce(self, v, by=None):
         """reduce"""
         l = len(self.vectors)
@@ -332,15 +380,18 @@ class PartialBasis(object):
         # Aw = copy(self.zerob)
         # for k in xrange(self.d):
         #     Aw[k] = sum(self.A[k,l]*w[l] for l in xrange(self.n))
-        while i<l and not isz(w):
+        # while i<l and not isz(w): #### TODO: Check this is ok.
+        while i<l :
             r, Ar = self.reduce_by_ith(w, Aw ,indices[i])
             if r is False:
                 i += 1
-            else: 
+            else:
                 # i.e, if r is a true reduction.
+                #### TODO: check this is OK.
                 # rotate the list and start over
-                indices.rotate(i+1)
-                i = 0
+                # indices.rotate(i+1)
+                # i = 0
+                i += 1
                 w = r
                 Aw = Ar
         return w
@@ -356,31 +407,51 @@ class PartialBasis(object):
             l = deque(l)
             l.rotate(-i)
             # print i, l
-            w = self.reduce(copy(self.vectors[i]), by=l)
+            w = self.reduce(self.vectors[i], by=l)
             if isz(w):
                 # remove this element
-                self.pop_element(i)
+                self.pop_element(i, pairs=True) # remove the corresponding pairs
                 b -= 1
             else:
-                # w might have been modified in-place!!!!
-                cw = self.c*w
-                if cw<0:
-                    for (k,wi) in enumerate(w):
-                        self.vectors[i][k]=-w[k]
-                self.Av[i] = self.A*w
-                self.cv[i] = cw
+                self.add_element(w,pos=i,pairs=False) # don't update the pairs
                 i +=1
 
-
-    def unfinished(self):
-        """ """
-        return len(self.pairs)
+    def clean(self):
+        b = len(self.vectors)
+        i = 0
+        while i<b:
+            l = range(b)
+            l.pop(i)
+            for (pos,k) in enumerate(l):
+                if ( # self.vectors[i] is reducible
+                    let_pp(self.vectors[k],self.vectors[i]) and
+                    let_mm(self.vectors[k],self.vectors[i]) and
+                    let_pp(self.Av[k], self.Av[i])
+                ):
+                    self.pop_element(i, pairs=True)
+                    b -= 1
+                    break
+                elif (# -self.vectors[i] is reducible
+                    let_pm(self.vectors[k],self.vectors[i]) and
+                    let_mp(self.vectors[k],self.vectors[i]) and
+                    let_pm(self.Av[k], self.Av[i])
+                ):
+                    w = self.reduce(copy(self.vectors[i]),by=l)
+                    if isz(w):
+                        self.pop_element(i, pairs=True)
+                        b -= 1
+                        break
+                    else:
+                        self.add_element(w,pos=i, pairs=False)
+                        i +=1
+                        break
+            else: #for exhausted
+                i += 1
 
 
     def next_pair(self):
-        """docstring for pop"""
         return self.pairs.pop()
-        
+
     def pm_split(self, v):
         """ slightly faster than pm_split2"""
         up = copy(self.zerox)
@@ -391,20 +462,16 @@ class PartialBasis(object):
             elif a<0:
                 um[i]=-a
         return up, um
-        
+
     def feasible(self, v):
         """docstring for feasible"""
         if let_pp(v,self.u) and let_mp(v,self.u):
             avp, avm = self.pm_split(v)
             return let(self.A*avp, self.b) and let(self.A*avm, self.b)
         return False
-    
-    
 
 
-
-
-def bubu(A,b,c,u):
+def bubu(A,b,c,u, interval=1000):
     A = matrix(ZZ,A)
     b = vector(ZZ, b)
     c = vector(ZZ,c)
@@ -423,10 +490,10 @@ def bubu(A,b,c,u):
     rx = 0
     elig = 0
     z = 0
-    
 
-    while g.unfinished():
-        # if len(g.vectors)>200: break
+
+    while g.pairs: # or unfinished?
+        if len(g.vectors)>2000: break
         i, j = g.next_pair()
 
         if g.criterion_1(i,j):
@@ -437,27 +504,26 @@ def bubu(A,b,c,u):
             c3 += 1
             continue
 
-        if g.criterion_2(i,j): # Gebauer and Möller criterion
-            c2 += 1
-            continue
-            
-       
-        
+        # if g.criterion_2(i,j): # Gebauer and Möller criterion
+        #     c2 += 1
+        #     continue
 
-        # At this point, cv < cw.
-        # 2.2.1
-        # r = g.vectors[i]
-        # r -= g.vectors[j]
+
+
+        # consider u[i]-u[j]
         r = copy(g.zerox)
         for l in xrange(g.n):
             r[l] = g.vectors[j][l]-g.vectors[i][l]
         g.binomial_order(r)
-        
-            
+
+
         if g.feasible(r):
             rx +=1
-            if (rx%1000) == 0:
+            if (rx%interval) == 0:
                 print "reduction: %s, basis: %s." % (rx, len(g.vectors))
+                # g.clean()
+                # g.self_reduce()
+                print "Down to %s" % len(g.vectors)
             c = g.reduce(r)
             if not isz(c):
                 g.add_element(c)
@@ -480,7 +546,7 @@ b1 = vector(ZZ, [31,27,38])
 u1 = vector(ZZ, 7*[38])
 
 
-B = matrix(ZZ, [
+B = matrix(ZZ, [ 
 [9, 6, 6, 8, 3, 6, 2, 4, 6, 3, 9, 4, 4, 8, 6, 9, 4, 2, 8, 8],
 [8, 8, 0, 5, 4, 4, 7, 0, 2, 3, 0, 6, 7, 7, 0, 6, 7, 8, 6, 0],
 [0, 9, 4, 1, 2, 0, 6, 5, 8, 5, 5, 5, 0, 0, 9, 3, 1, 8, 4, 8],
@@ -488,6 +554,6 @@ B = matrix(ZZ, [
 [3, 0, 2, 7, 5, 8, 1, 2, 1, 5, 7, 8, 3, 8, 4, 3, 6, 2, 9, 3],
 ])
 c2 = vector(ZZ,[3, 2, 9, 1, 7, 5, 6, 2, 7, 8, 6, 9, 2, 6, 8, 7, 6, 2, 2, 1])
-b2 = vector(ZZ, 5*[50])
+b2 = vector(ZZ, 5*[20])
 u2 = vector(ZZ, 20*[1])
 
