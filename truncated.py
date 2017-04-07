@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
-from collections import deque 
-from itertools import izip
+from collections import deque
+from itertools import izip, imap
 import pdb
 
 
 def matprod(A,b):
     return [sum(ai*bi for ai,bi in izip(row, b)) for row in A]
-    
+
 def dotprod(u,v):
     return sum(ui*vi for (ui,vi) in izip(u,v))
 
@@ -41,6 +41,7 @@ def let_pp(a,b):
         if a[i]>0 and a[i]>max(b[i], 0):
             return False
     return True
+
 
 def let_pm(a,b):
     "True if and only if a^+ is less or equal than b^-."
@@ -123,7 +124,6 @@ def pm_split(v):
     return vector(ZZ,up), vector(ZZ,um)
 
 
-
 class PartialBasis(object):
     """docstring for PartialBasis"""
     def __init__(self, A, c, b, u):
@@ -146,7 +146,8 @@ class PartialBasis(object):
         self.zerox = vector(ZZ,self.n*[0])
         self.zerob = vector(ZZ, self.d*[0])
         for e in identity_matrix(ZZ,self.n).rows():
-            self.add_element(e)
+            self.add_element(copy(e))
+
 
 
     def supports(self, v):
@@ -216,7 +217,7 @@ class PartialBasis(object):
         if pairs and l: # true if this is not the first vector
             for i in xrange(l):
                 self.pairs.append([i,l])
-                
+
 
     def pop_element(self, i, pairs=False):
         self.vectors.pop(i)
@@ -228,7 +229,7 @@ class PartialBasis(object):
         self.Av_p.pop(i)
         if pairs:
             j = 0
-            l = len(self.pairs) 
+            l = len(self.pairs)
             while j<l:
                 p = self.pairs[j]
                 if i==p[0] or i==p[1]:
@@ -239,23 +240,23 @@ class PartialBasis(object):
                     self.pairs[j] = [p[0]-1, p[1]-1]
                     # print "displa %s %s %s new=%s" % (j,p,i, self.pairs[j])
                     # if self.pairs[j][1]>=len(self.vectors):print 30*"-", "problem: %s at %s %s (len=%s)" % (i,j,p, len(self.vectors))
-                    
+
                     j += 1
                 elif p[0]<i and i<p[1]:
                     self.pairs[j] = [p[0], p[1]-1]
                     # print "contra %s %s %s new=%s" % (j,p,i, self.pairs[j])
                     # if self.pairs[j][1]>=len(self.vectors):print 30*"-", "problem: %s at %s %s (len=%s)" % (i,j,p, len(self.vectors))
-                    
+
                     j += 1
                 else:
                     # print "nothing at %s, %s, %s" % (j,p,i)
                     j += 1
-                    
-                    
+
+
         # print len(self.vectors)
         # print self.pairs
-                    
-                
+
+
 
 
     def criterion_1(self, i, j):
@@ -309,7 +310,7 @@ class PartialBasis(object):
         return False
 
 
-    def reduce_by_ith(self, s, As, i):
+    def reduce_by_ith(self, w, Aw, i):
         """
         It modifies s and As in place!!!
 
@@ -324,9 +325,6 @@ class PartialBasis(object):
         round = 0
         v = self.vectors[i]
         Av = self.Av[i]
-
-        w = s
-        Aw = As
 
         # if isz(w): return w, Aw
 
@@ -387,11 +385,9 @@ class PartialBasis(object):
                 i += 1
             else:
                 # i.e, if r is a true reduction.
-                #### TODO: check this is OK.
                 # rotate the list and start over
-                # indices.rotate(i+1)
-                # i = 0
-                i += 1
+                indices.rotate(i+1)
+                i = 0
                 w = r
                 Aw = Ar
         return w
@@ -416,12 +412,13 @@ class PartialBasis(object):
                 self.add_element(w,pos=i,pairs=False) # don't update the pairs
                 i +=1
 
-    def clean(self):
+    def clean(self, pairs=True):
         b = len(self.vectors)
         i = 0
         while i<b:
-            l = range(b)
-            l.pop(i)
+            l = deque(xrange(b))
+            l.rotate(-i)
+            l.popleft()
             for (pos,k) in enumerate(l):
                 if ( # self.vectors[i] is reducible
                     let_pp(self.vectors[k],self.vectors[i]) and
@@ -436,9 +433,9 @@ class PartialBasis(object):
                     let_mp(self.vectors[k],self.vectors[i]) and
                     let_pm(self.Av[k], self.Av[i])
                 ):
-                    w = self.reduce(copy(self.vectors[i]),by=l)
+                    w = self.reduce(self.vectors[i],by=l)
                     if isz(w):
-                        self.pop_element(i, pairs=True)
+                        self.pop_element(i, pairs=pairs)
                         b -= 1
                         break
                     else:
@@ -493,6 +490,12 @@ def bubu(A,b,c,u, interval=1000):
 
 
     while g.pairs: # or unfinished?
+        # if len(g.vectors)%interval==0:
+        #     print "cleaning (%s):" % len(g.vectors),
+        #     g.clean()
+        #     print "%s" % len(g.vectors)
+    
+    
         if len(g.vectors)>2000: break
         i, j = g.next_pair()
 
@@ -523,7 +526,6 @@ def bubu(A,b,c,u, interval=1000):
                 print "reduction: %s, basis: %s." % (rx, len(g.vectors))
                 # g.clean()
                 # g.self_reduce()
-                print "Down to %s" % len(g.vectors)
             c = g.reduce(r)
             if not isz(c):
                 g.add_element(c)
@@ -546,7 +548,7 @@ b1 = vector(ZZ, [31,27,38])
 u1 = vector(ZZ, 7*[38])
 
 
-B = matrix(ZZ, [ 
+B = matrix(ZZ, [
 [9, 6, 6, 8, 3, 6, 2, 4, 6, 3, 9, 4, 4, 8, 6, 9, 4, 2, 8, 8],
 [8, 8, 0, 5, 4, 4, 7, 0, 2, 3, 0, 6, 7, 7, 0, 6, 7, 8, 6, 0],
 [0, 9, 4, 1, 2, 0, 6, 5, 8, 5, 5, 5, 0, 0, 9, 3, 1, 8, 4, 8],
